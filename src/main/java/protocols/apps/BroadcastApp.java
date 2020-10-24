@@ -1,22 +1,22 @@
 package protocols.apps;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Properties;
+import java.util.Random;
+import java.util.UUID;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import babel.core.GenericProtocol;
 import babel.exceptions.HandlerRegistrationException;
 import network.data.Host;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import protocols.apps.timers.BroadcastTimer;
 import protocols.apps.timers.ExitTimer;
 import protocols.apps.timers.StartTimer;
 import protocols.apps.timers.StopTimer;
 import protocols.broadcast.common.BroadcastRequest;
 import protocols.broadcast.common.DeliverNotification;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Properties;
-import java.util.Random;
-import java.util.UUID;
 
 public class BroadcastApp extends GenericProtocol {
     private static final Logger logger = LogManager.getLogger(BroadcastApp.class);

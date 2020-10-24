@@ -1,15 +1,15 @@
-import babel.core.Babel;
-import network.data.Host;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import protocols.apps.BroadcastApp;
-import protocols.broadcast.eagerpush.EagerPushBroadcast;
-import protocols.broadcast.flood.FloodBroadcast;
-import protocols.membership.full.SimpleFullMembership;
-import utils.InterfaceToIp;
-
 import java.net.InetAddress;
 import java.util.Properties;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import babel.core.Babel;
+import network.data.Host;
+import protocols.apps.BroadcastApp;
+import protocols.broadcast.eagerpush.EagerPushBroadcast;
+import protocols.membership.full.SimpleFullMembership;
+import utils.InterfaceToIp;
 
 
 public class Main {
@@ -45,7 +45,7 @@ public class Main {
         logger.info("Hello, I am {}", myself);
 
         // Application
-        BroadcastApp broadcastApp = new BroadcastApp(myself, props, FloodBroadcast.PROTOCOL_ID);
+        BroadcastApp broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
         // Broadcast Protocol
 //        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
         EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);

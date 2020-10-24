@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 public class EagerPushMessage extends ProtoMessage {
-    public static final short MSG_ID = 201;
+    public static final short MSG_ID = 501;
 
     private final UUID mid;
     private final Host sender;
