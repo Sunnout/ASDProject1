@@ -21,7 +21,7 @@ public class EagerPushMessage extends ProtoMessage {
 
     @Override
     public String toString() {
-        return "FloodMessage{" +
+        return "EagerPushMessage{" +
                 "mid=" + mid +
                 '}';
     }
@@ -52,14 +52,14 @@ public class EagerPushMessage extends ProtoMessage {
 
     public static ISerializer<EagerPushMessage> serializer = new ISerializer<>() {
         @Override
-        public void serialize(EagerPushMessage floodMessage, ByteBuf out) throws IOException {
-            out.writeLong(floodMessage.mid.getMostSignificantBits());
-            out.writeLong(floodMessage.mid.getLeastSignificantBits());
-            Host.serializer.serialize(floodMessage.sender, out);
-            out.writeShort(floodMessage.toDeliver);
-            out.writeInt(floodMessage.content.length);
-            if (floodMessage.content.length > 0) {
-                out.writeBytes(floodMessage.content);
+        public void serialize(EagerPushMessage eagerPushMessage, ByteBuf out) throws IOException {
+            out.writeLong(eagerPushMessage.mid.getMostSignificantBits());
+            out.writeLong(eagerPushMessage.mid.getLeastSignificantBits());
+            Host.serializer.serialize(eagerPushMessage.sender, out);
+            out.writeShort(eagerPushMessage.toDeliver);
+            out.writeInt(eagerPushMessage.content.length);
+            if (eagerPushMessage.content.length > 0) {
+                out.writeBytes(eagerPushMessage.content);
             }
         }
 

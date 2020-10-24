@@ -96,7 +96,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 
 	/*--------------------------------- Messages ---------------------------------------- */
 	private void uponEagerPushMessage(EagerPushMessage msg, Host from, short sourceProto, int channelId) {
-		logger.trace("Received {} from {}", msg, from);
+		logger.info("Received {} from {}", msg, from);
 		// If we already received it once, do nothing (or we would end up with a nasty
 		// infinite loop)
 		if (received.add(msg.getMid())) {
@@ -107,7 +107,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 				Set<Host> sample = getNeighboursSample(from);
 				// Simply send the message to every known neighbour (who will then do the same)
 				sample.forEach(host -> {
-					logger.trace("Sent {} to {}", msg, host);
+					logger.info("Sent {} to {}", msg, host);
 					sendMessage(msg, host);
 				});
 			}
