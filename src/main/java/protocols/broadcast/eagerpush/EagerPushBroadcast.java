@@ -31,6 +31,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 	private final Host myself; // My own address/port
 	private final Set<Host> neighbours; // My known neighbours (a.k.a peers the membership protocol told me about)
 	private final Set<UUID> received; // Set of received messages (since we do not want to deliver the same msg twice)
+	private final int fanout; // Number of neighbours to gossip message to
 
 	// We can only start sending messages after the membership protocol informed us
 	// that the channel is ready
@@ -42,6 +43,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 		neighbours = new HashSet<>();
 		received = new HashSet<>();
 		channelReady = false;
+		fanout = (int)Math.ceil(Math.log(Integer.parseInt(properties.getProperty("node_magnitude"))));
 
 		/*--------------------- Register Request Handlers ----------------------------- */
 		registerRequestHandler(BroadcastRequest.REQUEST_ID, this::uponBroadcastRequest);
@@ -119,22 +121,16 @@ public class EagerPushBroadcast extends GenericProtocol {
 		Host[] hosts = new Host[numberNeighbours];
 		neighbours.toArray(hosts);
 
-		if (numberNeighbours > 1) {
-			// TODO: how to compute fanout?
-			int fanout = (int) Math.ceil(Math.log(numberNeighbours));
-
-
+		if (numberNeighbours > fanout) {
 			while (sample.size() != fanout) {
-				int ind = rand.nextInt(numberNeighbours);
-				Host host = hosts[ind];
+				Host host = hosts[rand.nextInt(numberNeighbours)];
 
-				// TODO: need to remove from?
 				if (!host.equals(from))
 					sample.add(host);
 			}
-		}
-		else
-			// TODO: if someone only has 1 neighbour is this needed?
+		} else
+			// TODO: if someone only has less neighbours than fanout, needed?
+			// TODO: remove from??
 			return neighbours;
 
 		return sample;
