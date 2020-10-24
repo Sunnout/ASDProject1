@@ -3,6 +3,7 @@ import network.data.Host;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import protocols.apps.BroadcastApp;
+import protocols.broadcast.eagerpush.EagerPushBroadcast;
 import protocols.broadcast.flood.FloodBroadcast;
 import protocols.membership.full.SimpleFullMembership;
 import utils.InterfaceToIp;
@@ -46,7 +47,8 @@ public class Main {
         // Application
         BroadcastApp broadcastApp = new BroadcastApp(myself, props, FloodBroadcast.PROTOCOL_ID);
         // Broadcast Protocol
-        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
+//        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
+        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
         // Membership Protocol
         SimpleFullMembership membership = new SimpleFullMembership(props, myself);
 
