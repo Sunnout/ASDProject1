@@ -1,22 +1,22 @@
 package protocols.broadcast.plumtree.messages;
 
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+
 import babel.generic.ProtoMessage;
 import io.netty.buffer.ByteBuf;
 import network.ISerializer;
 import network.data.Host;
-
-import java.io.IOException;
-import java.util.UUID;
 
 public class PlumtreeIHaveMessage extends ProtoMessage {
     public static final short MSG_ID = 602;
 
     private final UUID mid;
     private final Host sender;
-
     private final short toDeliver;
-    private final UUID content; //UUID of message that sender has
-    
+    private final Set<UUID> messageIds; // Set of UUIDs of messages that sender has
     private int round;
 
     @Override
@@ -26,13 +26,13 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
                 '}';
     }
 
-    public PlumtreeIHaveMessage(UUID mid, Host sender, int round, short toDeliver, UUID content) {
+    public PlumtreeIHaveMessage(UUID mid, Host sender, int round, short toDeliver, Set<UUID> messageIds) {
         super(MSG_ID);
         this.mid = mid;
         this.sender = sender;
         this.round = round;
         this.toDeliver = toDeliver;
-        this.content = content;
+        this.messageIds = messageIds;
     }
 
     public int getRound() {
@@ -55,9 +55,21 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
     public short getToDeliver() {
         return toDeliver;
     }
-
-    public UUID getContent() {
-        return content;
+    
+    public Set<UUID> getMessageIds() {
+    	return messageIds;
+    }
+    
+    public void addMessageId(UUID messageId) {
+    	messageIds.add(messageId);
+    }
+    
+    public boolean removeMessageId(UUID messageId) {
+    	return messageIds.remove(messageId);
+    }
+    
+    public void clearMessageIds() {
+    	messageIds.clear();
     }
 
     public static ISerializer<PlumtreeIHaveMessage> serializer = new ISerializer<>() {
@@ -68,8 +80,12 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
             Host.serializer.serialize(plumtreeIHaveMessage.sender, out);
             out.writeInt(plumtreeIHaveMessage.round);
             out.writeShort(plumtreeIHaveMessage.toDeliver);
-            out.writeLong(plumtreeIHaveMessage.content.getMostSignificantBits());
-            out.writeLong(plumtreeIHaveMessage.content.getLeastSignificantBits());
+            out.writeInt(plumtreeIHaveMessage.messageIds.size());
+            plumtreeIHaveMessage.messageIds.forEach(id -> {
+            	out.writeLong(id.getMostSignificantBits());
+                out.writeLong(id.getLeastSignificantBits());
+			});
+
         }
 
         @Override
@@ -80,11 +96,12 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
             Host sender = Host.serializer.deserialize(in);
             int round = in.readInt();
             short toDeliver = in.readShort();
-            firstLong = in.readLong();
-            secondLong = in.readLong();
-            UUID content = new UUID(firstLong, secondLong);
+            Set<UUID> messageIds = new HashSet<>();
+            for(int i = 0; i < in.readInt(); i++) {
+            	messageIds.add(new UUID(in.readLong(), in.readLong()));
+            }
 
-            return new PlumtreeIHaveMessage(mid, sender, round, toDeliver, content);
+            return new PlumtreeIHaveMessage(mid, sender, round, toDeliver, messageIds);
         }
     };
 }

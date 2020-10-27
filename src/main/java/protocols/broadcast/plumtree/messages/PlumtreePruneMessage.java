@@ -15,19 +15,17 @@ public class PlumtreePruneMessage extends ProtoMessage {
 	private final Host sender;
 
 	private final short toDeliver;
-	private final byte[] content;
 
 	@Override
 	public String toString() {
 		return "PlumtreePruneMessage{" + "mid=" + mid + '}';
 	}
 
-	public PlumtreePruneMessage(UUID mid, Host sender, short toDeliver, byte[] content) {
+	public PlumtreePruneMessage(UUID mid, Host sender, short toDeliver) {
 		super(MSG_ID);
 		this.mid = mid;
 		this.sender = sender;
 		this.toDeliver = toDeliver;
-		this.content = content;
 	}
 
 	public Host getSender() {
@@ -42,10 +40,6 @@ public class PlumtreePruneMessage extends ProtoMessage {
 		return toDeliver;
 	}
 
-	public byte[] getContent() {
-		return content;
-	}
-
 	public static ISerializer<PlumtreePruneMessage> serializer = new ISerializer<>() {
 		@Override
 		public void serialize(PlumtreePruneMessage plumtreePruneMessage, ByteBuf out) throws IOException {
@@ -53,10 +47,6 @@ public class PlumtreePruneMessage extends ProtoMessage {
 			out.writeLong(plumtreePruneMessage.mid.getLeastSignificantBits());
 			Host.serializer.serialize(plumtreePruneMessage.sender, out);
 			out.writeShort(plumtreePruneMessage.toDeliver);
-			out.writeInt(plumtreePruneMessage.content.length);
-			if (plumtreePruneMessage.content.length > 0) {
-				out.writeBytes(plumtreePruneMessage.content);
-			}
 		}
 
 		@Override
@@ -66,12 +56,8 @@ public class PlumtreePruneMessage extends ProtoMessage {
 			UUID mid = new UUID(firstLong, secondLong);
 			Host sender = Host.serializer.deserialize(in);
 			short toDeliver = in.readShort();
-			int size = in.readInt();
-			byte[] content = new byte[size];
-			if (size > 0)
-				in.readBytes(content);
 
-			return new PlumtreePruneMessage(mid, sender, toDeliver, content);
+			return new PlumtreePruneMessage(mid, sender, toDeliver);
 		}
 	};
 }

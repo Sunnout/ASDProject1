@@ -34,25 +34,25 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private final Host myself; // My own address/port
 	private final Set<Host> eagerPushPeers; // Neighbours with which to use eager push gossip
 	private final Set<Host> lazyPushPeers; // Neighbours with which to use lazy push gossip
-	private final ArrayList<PlumtreeIHaveMessage> lazyMessageQueue; // List msg announcements to be sent
-	private final ArrayList<Host> lazyHostQueue; // List host to send announcements to
 
-	private final Set<PlumtreeIHaveMessage> missing; // Set of missing messages
-	private final Set<UUID> received; // Set of received messages
+	private final PlumtreeIHaveMessage lazyIHaveMessage; // IHAVE msg with announcements to be sent
+	private final Set<PlumtreeIHaveMessage> missing; // Set of IHAVE msgs that contain UUIDs of missing msgs
+	private final Set<UUID> received; // Set of UUIDs of received messages
 
-	// We can only start sending messages after the membership protocol informed us
-	// that the channel is ready
 	private boolean channelReady;
 
 	public PlumtreeBroadcast(Properties properties, Host myself) throws IOException, HandlerRegistrationException {
 		super(PROTOCOL_NAME, PROTOCOL_ID);
 		this.myself = myself;
-		eagerPushPeers = new HashSet<>(); // TODO: initially contains f (fanout) random peers. o que fazer quando inicia
-		lazyPushPeers = new HashSet<>(); // initially empty
-		lazyMessageQueue = new ArrayList<>(); // initially empty
-		lazyHostQueue = new ArrayList<>(); // initially empty
-		missing = new HashSet<>(); // initially empty
-		received = new HashSet<>(); // initially empty
+		eagerPushPeers = new HashSet<>();
+		lazyPushPeers = new HashSet<>();
+
+		// TODO: onde buscar source proto para por aqui???
+		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0,
+				(short)0, new HashSet<>());
+
+		missing = new HashSet<>(); 
+		received = new HashSet<>();
 		channelReady = false;
 
 		/*--------------------- Register Request Handlers ----------------------------- */
@@ -66,24 +66,23 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	@Override
 	public void init(Properties props) {
-		// TODO: inicializo aqui as coisas ou no construtor??
-		// Nothing to do here, we just wait for event from the membership or the
-		// application
-
-		// tenho de esperar até ter f neighbours para iniciar o protocolo?
+		/*
+		 * Init é para inicializar timers ou buscar configs que só estão
+		 * definidas depois dos protocolos terem sido todos inicializados
+		 */
 	}
 
-	// Upon receiving the channelId from the membership, register our own callbacks
-	// and serializers
+	// Upon receiving the channelId from the membership, register callbacks and serializers
 	private void uponChannelCreated(ChannelCreated notification, short sourceProto) {
 		int cId = notification.getChannelId();
-		// Allows this protocol to receive events from this channel.
 		registerSharedChannel(cId);
+
 		/*---------------------- Register Message Serializers ---------------------- */
 		registerMessageSerializer(cId, PlumtreeGossipMessage.MSG_ID, PlumtreeGossipMessage.serializer);
 		registerMessageSerializer(cId, PlumtreeIHaveMessage.MSG_ID, PlumtreeIHaveMessage.serializer);
 		registerMessageSerializer(cId, PlumtreePruneMessage.MSG_ID, PlumtreePruneMessage.serializer);
 		registerMessageSerializer(cId, PlumtreeGraftMessage.MSG_ID, PlumtreeGraftMessage.serializer);
+
 		/*---------------------- Register Message Handlers -------------------------- */
 		try {
 			registerMessageHandler(cId, PlumtreeGossipMessage.MSG_ID, this::uponPlumtreeGossipMessage,
@@ -97,35 +96,26 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			e.printStackTrace();
 			System.exit(1);
 		}
-		// Now we can start sending messages
+
 		channelReady = true;
 	}
 
 	/*--------------------------------- Requests ---------------------------------------- */
 
+
 	private void uponBroadcastRequest(BroadcastRequest request, short sourceProto) {
 		if (!channelReady)
 			return;
 
-		// Send msg via eager push gossip
-		PlumtreeGossipMessage gossipMsg = new PlumtreeGossipMessage(request.getMsgId(), request.getSender(), 0,
+		PlumtreeGossipMessage msg = new PlumtreeGossipMessage(request.getMsgId(), request.getSender(), 0,
 				sourceProto, request.getMsg());
-		eagerPushGossip(gossipMsg, myself);
+		eagerPushGossip(msg);
+		lazyPushGossip(msg);
+		triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
+		received.add(msg.getMid());
 
-		// Add IHAVE msg to announcements
-		// TODO: como criar Id da mensagem nova?
-		PlumtreeIHaveMessage iHaveMsg = new PlumtreeIHaveMessage(request.getMsgId(), request.getSender(), 0,
-				sourceProto, request.getMsgId());
-		lazyPushGossip(iHaveMsg, myself);
-
-		// Deliver msg
-		triggerNotification(new DeliverNotification(gossipMsg.getMid(), gossipMsg.getSender(), gossipMsg.getContent()));
-
-		// Add msgId to set of received msgIds
-		received.add(gossipMsg.getMid());
-
-		// uponPlumtreeMessage(msg, myself, getProtoId(), -1);
 	}
+
 
 	/*--------------------------------- Messages ---------------------------------------- */
 
@@ -133,41 +123,41 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		logger.trace("Received {} from {}", msg, from);
 
 		if (received.add(msg.getMid())) {
-			// Deliver msg
 			triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
 
-			missing.forEach(missMsg -> {
-				if (missMsg.getContent().equals(msg.getMid())) {
+			missing.forEach(iHaveMsg -> {
+				if(iHaveMsg.removeMessageId(msg.getMid())) {
 					// TODO: Cancel timer(msg.getMid())
-					// TODO: missing.remove(missMsg); não temos de tirar a message do missing?
 				}
 			});
 
-			// Increment round and send msg via eager push gossip
 			msg.incrementRound();
-			eagerPushGossip(msg, myself);
-
-			// TODO: como criar Id da mensagem nova?
-			PlumtreeIHaveMessage iHaveMsg = new PlumtreeIHaveMessage(msg.getMid(), msg.getSender(), msg.getRound(),
-					sourceProto, msg.getMid());
-			lazyPushGossip(iHaveMsg, myself);
-
+			eagerPushGossip(msg);
+			lazyPushGossip(msg);
 			eagerPushPeers.add(msg.getSender());
 			lazyPushPeers.remove(msg.getSender());
-			optimization();
+			optimization(msg); // TODO: implement optimization
 
 		} else {
 			eagerPushPeers.remove(msg.getSender());
 			lazyPushPeers.add(msg.getSender());
-			// TODO: Send PRUNE msg
+			sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself, sourceProto), msg.getSender());
 		}
 	}
 
 	private void uponPlumtreeIHaveMessage(PlumtreeIHaveMessage msg, Host from, short sourceProto, int channelId) {
-		if (!received.contains(msg.getContent())) {
-			// if there is no Timer for msg.getContent() then, setup timer
+		// TODO: isto esta correto?
+		msg.getMessageIds().forEach(id -> {
+			if(received.contains(id)) {
+				msg.removeMessageId(id);
+			} else {
+				// if there is no Timer for id then
+					//setup timer for id
+			}
+		});
+		
+		if(msg.getMessageIds().size() > 0)
 			missing.add(msg);
-		}
 	}
 
 	private void uponPlumtreePruneMessage(PlumtreePruneMessage msg, Host from, short sourceProto, int channelId) {
@@ -178,7 +168,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private void uponPlumtreeGraftMessage(PlumtreeGraftMessage msg, Host from, short sourceProto, int channelId) {
 		eagerPushPeers.add(msg.getSender());
 		lazyPushPeers.remove(msg.getSender());
-		if (!received.add(msg.getMid()))
+		if (received.contains(msg.getMid()))
 			sendMessage(msg, msg.getSender());
 	}
 
@@ -186,45 +176,61 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		logger.error("Message {} to {} failed, reason: {}", msg, host, throwable);
 	}
 
-	private void eagerPushGossip(PlumtreeGossipMessage msg, Host from) {
-		// TODO: mandar ronda na mensagem ou como parâmetro separado?
+
+	/*---------------------------- Auxiliary Functions ----------------------------------- */
+
+	private void eagerPushGossip(PlumtreeGossipMessage msg) {
 
 		eagerPushPeers.forEach(host -> {
-			if (!host.equals(from)) {
-				logger.trace("Sent {} to {}", msg, host);
+			if (!host.equals(myself)) {
+				logger.trace("Sent {} to {}", msg, myself);
 				sendMessage(msg, host);
 			}
 		});
 	}
 
-	private void lazyPushGossip(PlumtreeIHaveMessage msg, Host from) {
-		// TODO: mandar ronda na mensagem ou como parâmetro separado?
+	private void lazyPushGossip(PlumtreeGossipMessage msg) {
 
-		lazyPushPeers.forEach(host -> {
-			if (!host.equals(from)) {
-				lazyMessageQueue.add(msg);
-				lazyHostQueue.add(host);
-			}
+		lazyIHaveMessage.addMessageId(msg.getMid());
+		simpleAnnouncementPolicy();
+
+	}
+
+	private void simpleAnnouncementPolicy() {
+		// TODO: cópia da message e dos peers para nao poderem ser modificados?
+
+		lazyPushPeers.forEach(h -> {
+			sendMessage(lazyIHaveMessage, myself);
+		});
+		lazyIHaveMessage.clearMessageIds();
+	}
+
+	private void lessSimpleAnnouncementPolicy() {
+		// TODO: cópia da message e dos peers para nao poderem ser modificados?
+
+		lazyPushPeers.forEach(h -> {
+			sendMessage(lazyIHaveMessage, myself);
 		});
 
-		dispatchAnnouncements();
+		/*
+		 * TODO: Juntar lista de uuids na ihavemessage e criar um timer que
+		 * periodicamente envia todas as que existem mas, se houverem
+		 * mudanças no lazyPushPeers (add ou remove) tem de se enviar
+		 * tudo antes de adicionar ou remover. Criar um boolean que diz
+		 * se naquele periodo do timer já enviou entretanto sem ser por
+		 * culpa do timer, se sim, não envia, senão envia.
+		 */
 	}
 
-	private void dispatchAnnouncements() {
-		PlumtreeIHaveMessage[] announcements = (PlumtreeIHaveMessage[]) lazyMessageQueue.toArray();
-		Host[] targets = (Host[]) lazyHostQueue.toArray();
-
-		for (int i = 0; i < announcements.length; i++) {
-			// TODO: create compact message here to send only one announcement???
-			// hostId1:msgId1;hostId2;msgId2...
-			lazyMessageQueue.remove(0);
-			lazyHostQueue.remove(0);
-		}
-	}
-
-	private void optimization() {
+	private void optimization(PlumtreeGossipMessage msg) {
 		// TODO
+		// round -1
 	}
+
+	private void uponTimer() {
+		// fazer verificação, se já não estiver no missing não fazer nada
+	}
+
 
 	/*--------------------------------- Notifications ---------------------------------------- */
 
