@@ -1,7 +1,6 @@
 package protocols.broadcast.plumtree;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Properties;
@@ -15,10 +14,6 @@ import babel.core.GenericProtocol;
 import babel.exceptions.HandlerRegistrationException;
 import babel.generic.ProtoMessage;
 import network.data.Host;
-import protocols.apps.timers.BroadcastTimer;
-import protocols.apps.timers.ExitTimer;
-import protocols.apps.timers.StartTimer;
-import protocols.apps.timers.StopTimer;
 import protocols.broadcast.common.BroadcastRequest;
 import protocols.broadcast.common.DeliverNotification;
 import protocols.broadcast.plumtree.messages.PlumtreeGossipMessage;
@@ -40,6 +35,8 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	// TODO: como escolher timeout?
 	public static final int LONGER_MISSING_TIMEOUT = 5000;
 	public static final int SHORTER_MISSING_TIMEOUT = 3000;
+	// TODO: how to define threshold value
+	public static final int THRESHOLD = 4;
 
 
 	private final Host myself; // My own address/port
@@ -154,7 +151,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			lazyPushGossip(msg);
 			eagerPushPeers.add(msg.getSender());
 			lazyPushPeers.remove(msg.getSender());
-			optimization(msg); // TODO: implement optimization
+			optimization(msg);
 
 		} else {
 			eagerPushPeers.remove(msg.getSender());
@@ -171,7 +168,6 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			} else if (!missingMessageTimers.containsKey(id)) {
 				long timer = setupTimer(new MissingMessageTimer(id), LONGER_MISSING_TIMEOUT);
 				missingMessageTimers.put(id, timer);
-
 			}
 		});
 
@@ -242,12 +238,17 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	}
 
 	private void optimization(PlumtreeGossipMessage msg) {
-		// TODO
-		// round -1
-	}
-
-	private void uponTimer() {
-		// fazer verificação, se já não estiver no missing não fazer nada
+		missing.forEach(iHaveMsg -> {
+			if(iHaveMsg.getMessageIds().contains(msg.getMid())) {
+				int r = iHaveMsg.getRound();
+				int round = msg.getRound()-1;
+		        if(r < round && (round - r) >= THRESHOLD) {
+		        	// TODO: how to get source protos
+		        	sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, (short)0, null), iHaveMsg.getSender());
+					sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself, (short)0), msg.getSender());
+		        }
+			}
+		});
 	}
 
 
