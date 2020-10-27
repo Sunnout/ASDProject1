@@ -15,7 +15,7 @@ public class PlumtreeGraftMessage extends ProtoMessage {
     private final Host sender;
 
     private final short toDeliver;
-    private final byte[] content;
+    private final UUID messageId;
     
     private int round;
 
@@ -26,13 +26,13 @@ public class PlumtreeGraftMessage extends ProtoMessage {
                 '}';
     }
 
-    public PlumtreeGraftMessage(UUID mid, Host sender, int round, short toDeliver, byte[] content) {
+    public PlumtreeGraftMessage(UUID mid, Host sender, int round, short toDeliver, UUID messageId) {
         super(MSG_ID);
         this.mid = mid;
         this.sender = sender;
         this.round = 0;
         this.toDeliver = toDeliver;
-        this.content = content;
+        this.messageId = messageId;
     }
 
     public int getRound() {
@@ -56,8 +56,8 @@ public class PlumtreeGraftMessage extends ProtoMessage {
         return toDeliver;
     }
 
-    public byte[] getContent() {
-        return content;
+    public UUID getMessageId() {
+        return messageId;
     }
 
     public static ISerializer<PlumtreeGraftMessage> serializer = new ISerializer<>() {
@@ -68,10 +68,8 @@ public class PlumtreeGraftMessage extends ProtoMessage {
             Host.serializer.serialize(plumtreeGraftMessage.sender, out);
             out.writeInt(plumtreeGraftMessage.round);
             out.writeShort(plumtreeGraftMessage.toDeliver);
-            out.writeInt(plumtreeGraftMessage.content.length);
-            if (plumtreeGraftMessage.content.length > 0) {
-                out.writeBytes(plumtreeGraftMessage.content);
-            }
+            out.writeLong(plumtreeGraftMessage.messageId.getMostSignificantBits());
+            out.writeLong(plumtreeGraftMessage.messageId.getLeastSignificantBits());
         }
 
         @Override
@@ -82,12 +80,11 @@ public class PlumtreeGraftMessage extends ProtoMessage {
             Host sender = Host.serializer.deserialize(in);
             int round = in.readInt();
             short toDeliver = in.readShort();
-            int size = in.readInt();
-            byte[] content = new byte[size];
-            if (size > 0)
-                in.readBytes(content);
+            firstLong = in.readLong();
+            secondLong = in.readLong();
+            UUID messageId = new UUID(firstLong, secondLong);
 
-            return new PlumtreeGraftMessage(mid, sender, round, toDeliver, content);
+            return new PlumtreeGraftMessage(mid, sender, round, toDeliver, messageId);
         }
     };
 }

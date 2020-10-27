@@ -2,6 +2,7 @@ package protocols.broadcast.plumtree;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
@@ -14,12 +15,17 @@ import babel.core.GenericProtocol;
 import babel.exceptions.HandlerRegistrationException;
 import babel.generic.ProtoMessage;
 import network.data.Host;
+import protocols.apps.timers.BroadcastTimer;
+import protocols.apps.timers.ExitTimer;
+import protocols.apps.timers.StartTimer;
+import protocols.apps.timers.StopTimer;
 import protocols.broadcast.common.BroadcastRequest;
 import protocols.broadcast.common.DeliverNotification;
 import protocols.broadcast.plumtree.messages.PlumtreeGossipMessage;
 import protocols.broadcast.plumtree.messages.PlumtreeGraftMessage;
 import protocols.broadcast.plumtree.messages.PlumtreeIHaveMessage;
 import protocols.broadcast.plumtree.messages.PlumtreePruneMessage;
+import protocols.broadcast.plumtree.timers.MissingMessageTimer;
 import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
@@ -31,13 +37,19 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	public static final String PROTOCOL_NAME = "Plumtree";
 	public static final short PROTOCOL_ID = 600;
 
+	// TODO: como escolher timeout?
+	public static final int LONGER_MISSING_TIMEOUT = 5000;
+	public static final int SHORTER_MISSING_TIMEOUT = 3000;
+
+
 	private final Host myself; // My own address/port
 	private final Set<Host> eagerPushPeers; // Neighbours with which to use eager push gossip
 	private final Set<Host> lazyPushPeers; // Neighbours with which to use lazy push gossip
-
 	private final PlumtreeIHaveMessage lazyIHaveMessage; // IHAVE msg with announcements to be sent
 	private final Set<PlumtreeIHaveMessage> missing; // Set of IHAVE msgs that contain UUIDs of missing msgs
 	private final Set<UUID> received; // Set of UUIDs of received messages
+	private final HashMap<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
+
 
 	private boolean channelReady;
 
@@ -53,6 +65,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 		missing = new HashSet<>(); 
 		received = new HashSet<>();
+		missingMessageTimers = new HashMap<>();
 		channelReady = false;
 
 		/*--------------------- Register Request Handlers ----------------------------- */
@@ -62,6 +75,9 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		subscribeNotification(NeighbourUp.NOTIFICATION_ID, this::uponNeighbourUp);
 		subscribeNotification(NeighbourDown.NOTIFICATION_ID, this::uponNeighbourDown);
 		subscribeNotification(ChannelCreated.NOTIFICATION_ID, this::uponChannelCreated);
+
+		/*--------------------- Register Timer Handlers ----------------------------- */
+		registerTimerHandler(MissingMessageTimer.TIMER_ID, this::uponMissingMessageTimer);
 	}
 
 	@Override
@@ -125,9 +141,11 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		if (received.add(msg.getMid())) {
 			triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
 
+			// Pq só há um timer e só pode cancelar uma vez?
+			boolean cancelled = false;
 			missing.forEach(iHaveMsg -> {
-				if(iHaveMsg.removeMessageId(msg.getMid())) {
-					// TODO: Cancel timer(msg.getMid())
+				if(iHaveMsg.removeMessageId(msg.getMid()) && !cancelled) {
+			        cancelTimer(missingMessageTimers.get(msg.getMid()));
 				}
 			});
 
@@ -148,14 +166,15 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private void uponPlumtreeIHaveMessage(PlumtreeIHaveMessage msg, Host from, short sourceProto, int channelId) {
 		// TODO: isto esta correto?
 		msg.getMessageIds().forEach(id -> {
-			if(received.contains(id)) {
+			if (received.contains(id)) {
 				msg.removeMessageId(id);
-			} else {
-				// if there is no Timer for id then
-					//setup timer for id
+			} else if (!missingMessageTimers.containsKey(id)) {
+				long timer = setupTimer(new MissingMessageTimer(id), LONGER_MISSING_TIMEOUT);
+				missingMessageTimers.put(id, timer);
+
 			}
 		});
-		
+
 		if(msg.getMessageIds().size() > 0)
 			missing.add(msg);
 	}
@@ -177,7 +196,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	}
 
 
-	/*---------------------------- Auxiliary Functions ----------------------------------- */
+	/*------------------------------- Procedures -------------------------------------- */
 
 	private void eagerPushGossip(PlumtreeGossipMessage msg) {
 
@@ -253,6 +272,28 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			});
 
 			logger.info("Neighbour down: " + h);
+		}
+	}
+
+
+	/*--------------------------------- Timers ---------------------------------------- */
+
+	private void uponMissingMessageTimer(MissingMessageTimer missingMessageTimer, long timerId) {
+		missingMessageTimers.remove(missingMessageTimer.getMessageId());
+
+		long timer = setupTimer(new MissingMessageTimer(missingMessageTimer.getMessageId()), SHORTER_MISSING_TIMEOUT);
+		missingMessageTimers.put(missingMessageTimer.getMessageId(), timer);
+		
+		for(PlumtreeIHaveMessage msg : missing) {
+			if (msg.getMessageIds().contains(missingMessageTimer.getMessageId())) {
+				eagerPushPeers.add(msg.getSender());
+				lazyPushPeers.remove(msg.getSender());
+				// TODO: no pseudo código aqui dizia para remover o primeiro announcement??
+				// TODO: get source proto for this
+				sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, msg.getRound(), (short)0,
+						missingMessageTimer.getMessageId()), msg.getSender());
+				break;
+			}
 		}
 	}
 }
