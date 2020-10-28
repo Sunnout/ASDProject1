@@ -30,6 +30,7 @@ import protocols.membership.common.notifications.NeighbourUp;
 import protocols.membership.full.messages.SampleMessage;
 import protocols.membership.full.timers.InfoTimer;
 import protocols.membership.full.timers.SampleTimer;
+import protocols.membership.hyparview.messages.JoinRequest;
 
 public class HyParView extends GenericProtocol {
 
@@ -44,7 +45,7 @@ public class HyParView extends GenericProtocol {
     private final Set<Host> passiveView; //large passive view of size greater than log(n)
 
     private final int sampleTime; //param: timeout for samples
-    private final int subsetSize; //param: maximum size of sample;
+    private final int fanout; //param: maximum size of sample;
 
     private final Random rnd;
 
@@ -60,7 +61,7 @@ public class HyParView extends GenericProtocol {
         this.rnd = new Random();
 
         //Get some configurations from the Properties object
-        this.subsetSize = Integer.parseInt(props.getProperty("sample_size", "6"));
+        this.fanout = 3 ; /// TODO get fanout from props
         this.sampleTime = Integer.parseInt(props.getProperty("sample_time", "2000")); //2 seconds
 
         String cMetricsInterval = props.getProperty("channel_metrics_interval", "10000"); //10 seconds
@@ -76,13 +77,12 @@ public class HyParView extends GenericProtocol {
         channelId = createChannel(TCPChannel.NAME, channelProps); //Create the channel with the given properties
 
         /*---------------------- Register Message Serializers ---------------------- */
-        registerMessageSerializer(channelId, SampleMessage.MSG_ID, SampleMessage.serializer);
+        registerMessageSerializer(channelId, JoinRequest.MSG_ID, JoinRequest.serializer);
 
         /*---------------------- Register Message Handlers -------------------------- */
-        registerMessageHandler(channelId, SampleMessage.MSG_ID, this::uponSample, this::uponMsgFail);
+        registerMessageHandler(channelId, JoinRequest.MSG_ID, this::uponJoinRequest, this::uponMsgFail);
 
         /*--------------------- Register Timer Handlers ----------------------------- */
-        registerTimerHandler(SampleTimer.TIMER_ID, this::uponSampleTimer);
         registerTimerHandler(InfoTimer.TIMER_ID, this::uponInfoTime);
 
         /*-------------------- Register Channel Events ------------------------------- */
@@ -107,8 +107,7 @@ public class HyParView extends GenericProtocol {
                 String[] hostElems = contact.split(":");
                 Host contactHost = new Host(InetAddress.getByName(hostElems[0]), Short.parseShort(hostElems[1]));
                 //We add to the pending set until the connection is successful
-                pending.add(contactHost);
-                openConnection(contactHost);
+                sendMessage(new JoinRequest(), contactHost);
             } catch (Exception e) {
                 logger.error("Invalid contact on configuration: '" + props.getProperty("contacts"));
                 e.printStackTrace();
@@ -116,27 +115,18 @@ public class HyParView extends GenericProtocol {
             }
         }
 
-        //Setup the timer used to send samples (we registered its handler on the constructor)
-        setupPeriodicTimer(new SampleTimer(), this.sampleTime, this.sampleTime);
-
         //Setup the timer to display protocol information (also registered handler previously)
         int pMetricsInterval = Integer.parseInt(props.getProperty("protocol_metrics_interval", "10000"));
         if (pMetricsInterval > 0)
             setupPeriodicTimer(new InfoTimer(), pMetricsInterval, pMetricsInterval);
     }
 
-    /*--------------------------------- Messages ---------------------------------------- */
-    private void uponSample(SampleMessage msg, Host from, short sourceProto, int channelId) {
-        //Received a sample from a peer. We add all the unknown peers to the "pending" map and attempt to establish
-        //a connection. If the connection is successful, we add the peer to the membership (in the connectionUp callback)
-        logger.debug("Received {} from {}", msg, from);
-        for (Host h : msg.getSample()) {
-            if (!h.equals(self) && !membership.contains(h) && !pending.contains(h)) {
-                pending.add(h);
-                //Every channel operation is asynchronous! The result is returned in the form of channel events
-                openConnection(h);
-            }
-        }
+    /*--------------------------------- Messages ---------------------------------------- */  
+ 
+    private void uponJoinRequest( JoinRequest jrq , Host from , short sourceProto , int channelId) {
+        logger.debug("Received {} from {}",jrq, from);
+        addToActiveView(from);
+    	
     }
 
     private void uponMsgFail(ProtoMessage msg, Host host, short destProto,
@@ -146,18 +136,29 @@ public class HyParView extends GenericProtocol {
     }
 
     /*--------------------------------- Timers ---------------------------------------- */
-    private void uponSampleTimer(SampleTimer timer, long timerId) {
-        //When the SampleTimer is triggered, get a random peer in the membership and send a sample
-        logger.debug("Sample Time: membership{}", membership);
-        if (membership.size() > 0) {
-            Host target = getRandom(membership);
-            Set<Host> subset = getRandomSubsetExcluding(membership, subsetSize, target);
-            subset.add(self);
-            sendMessage(new SampleMessage(subset), target);
-            logger.debug("Sent SampleMessage {}", target);
-        }
-    }
+ 
 
+    /*--------------------------------- Utils ---------------------------------------- */
+
+    
+    private void addToActiveView(Host node) {
+    	
+    	  if(activeView.size() < (fanout + 1)) {
+          	
+          		activeView.add(node);
+          }
+          else {
+	        	Host random = getRandom(activeView);
+	          	activeView.remove(random);
+	          	closeConnection(random);
+	          	
+	          	activeView.add(node);	          	
+          }
+    	  
+    	openConnection(node);
+
+    }
+    
     //Gets a random element from the set of peers
     private Host getRandom(Set<Host> hostSet) {
         int idx = rnd.nextInt(hostSet.size());
@@ -169,54 +170,46 @@ public class HyParView extends GenericProtocol {
         }
         return null;
     }
-
-    //Gets a random subset from the set of peers
-    private static Set<Host> getRandomSubsetExcluding(Set<Host> hostSet, int sampleSize, Host exclude) {
-        List<Host> list = new LinkedList<>(hostSet);
-        list.remove(exclude);
-        Collections.shuffle(list);
-        return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
-    }
+    
 
     /* --------------------------------- TCPChannel Events ---------------------------- */
 
     //If a connection is successfully established, this event is triggered. In this protocol, we want to add the
     //respective peer to the membership, and inform the Dissemination protocol via a notification.
     private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
-        Host peer = event.getNode();
-        logger.debug("Connection to {} is up", peer);
-        // if it is in the passive view , remove it from the passive view and add to active view
-        if(passiveView.contains(peer)) {
-            passiveView.remove(peer);
-        }
-        if (activeView.add(peer)) {
-            triggerNotification(new NeighbourUp(peer));
-        }
+//        Host peer = event.getNode();
+//
+//        logger.debug("Connection to {} is up", peer);
+//        // if it is in the passive view , remove it from the passive view and add to active view
+//        if(passiveView.contains(peer)) {
+//            passiveView.remove(peer);
+//        }
+//        if (activeView.add(peer)) {
+//            triggerNotification(new NeighbourUp(peer));
+//        }
     }
 
     //If an established connection is disconnected, remove the peer from the membership and inform the Dissemination
     //protocol. Alternatively, we could do smarter things like retrying the connection X times.
     private void uponOutConnectionDown(OutConnectionDown event, int channelId) {
-        Host peer = event.getNode();
-        logger.debug("Connection to {} is down cause {}", peer, event.getCause());
-        //if the node that failed belongs to the active view, find a q node from its passive view and try to connect to it
-        if(activeView.contains(peer)) {
-        	activeView.remove(peer);
-        	Host q = getRandom(passiveView);
-        	
-        	
-        
-        }
-        triggerNotification(new NeighbourDown(event.getNode()));
+//        Host peer = event.getNode();
+//        logger.debug("Connection to {} is down cause {}", peer, event.getCause());
+//        //if the node that failed belongs to the active view, find a q node from its passive view and try to connect to it
+//        if(activeView.contains(peer)) {
+//        	activeView.remove(peer);
+//        	Host q = getRandom(passiveView);
+//        	
+//        	
+//        
+//        }
+//        triggerNotification(new NeighbourDown(event.getNode()));
     }
 
     //If a connection fails to be established, this event is triggered. In this protocol, we simply remove from the
     //pending set. Note that this event is only triggered while attempting a connection, not after connection.
     //Thus the peer will be in the pending set, and not in the membership (unless something is very wrong with our code)
     private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> event, int channelId) {
-    	Host peer = event.getNode();
         logger.debug("Connection to {} failed cause: {}", event.getNode(), event.getCause());
-        passiveView.remove(event.getNode());
     }
 
     //If someone established a connection to me, this event is triggered. In this protocol we do nothing with this event.
@@ -237,8 +230,8 @@ public class HyParView extends GenericProtocol {
     //We are simply printing some information to present during runtime.
     private void uponInfoTime(InfoTimer timer, long timerId) {
         StringBuilder sb = new StringBuilder("Membership Metrics:\n");
-        sb.append("Membership: ").append(membership).append("\n");
-        sb.append("PendingMembership: ").append(pending).append("\n");
+        sb.append("Active View: ").append(activeView).append("\n");
+        sb.append("Passive View: ").append(passiveView).append("\n");
         //getMetrics returns an object with the number of events of each type processed by this protocol.
         //It may or may not be useful to you, but at least you know it exists.
         sb.append(getMetrics());
