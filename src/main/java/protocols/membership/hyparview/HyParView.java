@@ -27,10 +27,11 @@ import network.data.Host;
 import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
-import protocols.membership.full.messages.SampleMessage;
 import protocols.membership.full.timers.InfoTimer;
-import protocols.membership.full.timers.SampleTimer;
+import protocols.membership.hyparview.messages.ForwardJoin;
 import protocols.membership.hyparview.messages.JoinRequest;
+import protocols.membership.hyparview.messages.NeighborRequest;
+import protocols.membership.hyparview.messages.Shuffle;
 
 public class HyParView extends GenericProtocol {
 
@@ -44,8 +45,8 @@ public class HyParView extends GenericProtocol {
     private final Set<Host> activeView; // small active view of size fanout +1 
     private final Set<Host> passiveView; //large passive view of size greater than log(n)
 
-    private final int sampleTime; //param: timeout for samples
     private final int fanout; //param: maximum size of sample;
+    private final int ARWL , PRWL; 
 
     private final Random rnd;
 
@@ -61,9 +62,10 @@ public class HyParView extends GenericProtocol {
         this.rnd = new Random();
 
         //Get some configurations from the Properties object
-        this.fanout = 3 ; /// TODO get fanout from props
-        this.sampleTime = Integer.parseInt(props.getProperty("sample_time", "2000")); //2 seconds
-
+        this.fanout = 3 ; /// TODO get from props
+        this.ARWL = 3;
+        this.PRWL = 1;
+        
         String cMetricsInterval = props.getProperty("channel_metrics_interval", "10000"); //10 seconds
 
         //Create a properties object to setup channel-specific properties. See the channel description for more details.
@@ -78,9 +80,19 @@ public class HyParView extends GenericProtocol {
 
         /*---------------------- Register Message Serializers ---------------------- */
         registerMessageSerializer(channelId, JoinRequest.MSG_ID, JoinRequest.serializer);
+        registerMessageSerializer(channelId, ForwardJoin.MSG_ID, ForwardJoin.serializer);    
+        registerMessageSerializer(channelId, NeighborRequest.MSG_ID, NeighborRequest.serializer);
+        registerMessageSerializer(channelId, Shuffle.MSG_ID, Shuffle.serializer);
+
+
+
 
         /*---------------------- Register Message Handlers -------------------------- */
         registerMessageHandler(channelId, JoinRequest.MSG_ID, this::uponJoinRequest, this::uponMsgFail);
+        registerMessageHandler(channelId, ForwardJoin.MSG_ID, this::uponForwardJoin, this::uponMsgFail);
+        registerMessageHandler(channelId, NeighborRequest.MSG_ID, this::uponNeighborRequest, this::uponMsgFail);
+
+
 
         /*--------------------- Register Timer Handlers ----------------------------- */
         registerTimerHandler(InfoTimer.TIMER_ID, this::uponInfoTime);
@@ -103,10 +115,12 @@ public class HyParView extends GenericProtocol {
         //If there is a contact node, attempt to establish connection
         if (props.containsKey("contact")) {
             try {
+                logger.info("Trying to reach contact node");
                 String contact = props.getProperty("contact");
                 String[] hostElems = contact.split(":");
                 Host contactHost = new Host(InetAddress.getByName(hostElems[0]), Short.parseShort(hostElems[1]));
-                //We add to the pending set until the connection is successful
+                //TODO add to active View or only add when forward join comes ?
+                openConnection(contactHost);
                 sendMessage(new JoinRequest(), contactHost);
             } catch (Exception e) {
                 logger.error("Invalid contact on configuration: '" + props.getProperty("contacts"));
@@ -114,6 +128,7 @@ public class HyParView extends GenericProtocol {
                 System.exit(-1);
             }
         }
+        
 
         //Setup the timer to display protocol information (also registered handler previously)
         int pMetricsInterval = Integer.parseInt(props.getProperty("protocol_metrics_interval", "10000"));
@@ -124,10 +139,55 @@ public class HyParView extends GenericProtocol {
     /*--------------------------------- Messages ---------------------------------------- */  
  
     private void uponJoinRequest( JoinRequest jrq , Host from , short sourceProto , int channelId) {
-        logger.debug("Received {} from {}",jrq, from);
-        addToActiveView(from);
+        logger.info("Received Join Request {} from {}",jrq, from);
+        
+        for(Host h : activeView) {
+        	sendMessage(new ForwardJoin(from,ARWL),h);
+        }
+       
+        addToActiveView(from);	
+    }
+    
+    private void uponForwardJoin(ForwardJoin fwdjoin, Host from ,short sourceProto , int channelId) {
+    	int ttl = fwdjoin.getTTL();
+    	Host node = fwdjoin.getnewNode();
+    	
+    	if (ttl == 0 || activeView.size() == 1) {
+    		addToActiveView(node);
+    	}
+    	else if( ttl == PRWL) {
+    		passiveView.add(node);
+    	}
+    	else {
+    		ttl --;
+    		Host nodeToSend = getRandom(getRandomSubsetExcluding(activeView,activeView.size()-1,from));
+    		sendMessage(new ForwardJoin(from,ttl),nodeToSend);
+    	}
+    }
+    
+    
+    
+    private void uponNeighborRequest(NeighborRequest nbreq, Host from ,short sourceProto , int channelId) {
+    	boolean highPrio = nbreq.getPriority();
+    	Host node = nbreq.getNode();
+    	if(highPrio) {
+    		addToActiveView(node);
+    		//TODO Accept the request
+    	}
+    	else {
+    		if(activeView.size() < fanout +1) {
+          		activeView.add(node);
+            	openConnection(node);
+    		}
+    		else {
+    			//TODO refuse the request
+    		}
+    	}
+    	
     	
     }
+    
+    
 
     private void uponMsgFail(ProtoMessage msg, Host host, short destProto,
                              Throwable throwable, int channelId) {
@@ -142,6 +202,8 @@ public class HyParView extends GenericProtocol {
 
     
     private void addToActiveView(Host node) {
+    	logger.info("Adding " + node.toString());
+        //protocol. Alternatively, we could do smarter things like retrying the connection X times.
     	
     	  if(activeView.size() < (fanout + 1)) {
           	
@@ -156,6 +218,8 @@ public class HyParView extends GenericProtocol {
           }
     	  
     	openConnection(node);
+    	
+    	logger.info("Active View size = " + activeView.size());
 
     }
     
@@ -171,45 +235,66 @@ public class HyParView extends GenericProtocol {
         return null;
     }
     
+    
+    //Gets a random subset from the set of hosts
+    private static Set<Host> getRandomSubsetExcluding(Set<Host> hostSet, int sampleSize, Host exclude) {
+        List<Host> list = new LinkedList<>(hostSet);
+        list.remove(exclude);
+        Collections.shuffle(list);
+        return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
+    }
 
     /* --------------------------------- TCPChannel Events ---------------------------- */
 
     //If a connection is successfully established, this event is triggered. In this protocol, we want to add the
     //respective peer to the membership, and inform the Dissemination protocol via a notification.
     private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
-//        Host peer = event.getNode();
-//
-//        logger.debug("Connection to {} is up", peer);
-//        // if it is in the passive view , remove it from the passive view and add to active view
-//        if(passiveView.contains(peer)) {
-//            passiveView.remove(peer);
-//        }
-//        if (activeView.add(peer)) {
-//            triggerNotification(new NeighbourUp(peer));
-//        }
+        Host peer = event.getNode();
+
+        logger.debug("Connection to {} is up", peer);
+        // TODO Is this if really necessary ? ????
+        if(passiveView.contains(peer)) {
+            passiveView.remove(peer);
+        }
+        
+        // should never enter this if , please code it nicely
+        if(!activeView.contains(peer)) {
+        	logger.error("Got connection without a host in my active View , check your code");
+        }
+        
+       boolean prio = activeView.size() == 0; 
+       
+       sendMessage(new NeighborRequest(self,prio), peer);
+        
     }
 
-    //If an established connection is disconnected, remove the peer from the membership and inform the Dissemination
-    //protocol. Alternatively, we could do smarter things like retrying the connection X times.
+    //If an established connection is disconnected
     private void uponOutConnectionDown(OutConnectionDown event, int channelId) {
-//        Host peer = event.getNode();
-//        logger.debug("Connection to {} is down cause {}", peer, event.getCause());
-//        //if the node that failed belongs to the active view, find a q node from its passive view and try to connect to it
-//        if(activeView.contains(peer)) {
-//        	activeView.remove(peer);
-//        	Host q = getRandom(passiveView);
-//        	
-//        	
-//        
-//        }
-//        triggerNotification(new NeighbourDown(event.getNode()));
+        Host peer = event.getNode();
+        logger.debug("Connection to {} is down cause {}", peer, event.getCause());
+        //if the node that failed belongs to the active view, find a q node from its passive view and try to connect to it
+        if(activeView.contains(peer)) {
+        	activeView.remove(peer);
+        	Host p = getRandom(passiveView);
+        	openConnection(p);
+
+        }
+        //triggerNotification(new NeighbourDown(event.getNode())); ??
     }
 
     //If a connection fails to be established, this event is triggered. In this protocol, we simply remove from the
     //pending set. Note that this event is only triggered while attempting a connection, not after connection.
-    //Thus the peer will be in the pending set, and not in the membership (unless something is very wrong with our code)
+
     private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> event, int channelId) {
         logger.debug("Connection to {} failed cause: {}", event.getNode(), event.getCause());
+        Host peer = event.getNode();
+        
+        if(passiveView.contains(peer)) {
+        	Host p = getRandom(passiveView);
+        	openConnection(p);
+        }
+     
+ 
     }
 
     //If someone established a connection to me, this event is triggered. In this protocol we do nothing with this event.

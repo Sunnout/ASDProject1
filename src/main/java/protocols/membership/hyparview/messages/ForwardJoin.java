@@ -1,52 +1,51 @@
 package protocols.membership.hyparview.messages;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
-
 import babel.generic.ProtoMessage;
 import io.netty.buffer.ByteBuf;
 import network.ISerializer;
 import network.data.Host;
-import protocols.membership.full.messages.SampleMessage;
 
 public class ForwardJoin extends ProtoMessage {
 
-    public final static short MSG_ID = 112;
+    public final static short MSG_ID = 111;
 
-    private final Set<Host> newNode;
+    private final Host newNode;
+    private final int ttl;
 
-    public ForwardJoin(Set<Host> sample) {
+    public ForwardJoin(Host newNode, int ttl) {  // TODO add TTL
         super(MSG_ID);
-        this.sample = sample;
+        this.newNode = newNode;
+        this.ttl = ttl;
     }
 
-    public Set<Host> getSample() {
-        return sample;
+    public Host getnewNode() {
+        return newNode;
+    }
+    
+    public int getTTL() {
+    	return ttl;
     }
 
     @Override
     public String toString() {
-        return "ShuffleMessage{" +
-                "subset=" + sample +
-                '}';
+        return "New Node = " + newNode.toString();
     }
-
-    public static ISerializer<SampleMessage> serializer = new ISerializer<SampleMessage>() {
+    
+    public static ISerializer<ForwardJoin> serializer = new ISerializer<ForwardJoin>() {
         @Override
-        public void serialize(SampleMessage sampleMessage, ByteBuf out) throws IOException {
-            out.writeInt(sampleMessage.sample.size());
-            for (Host h : sampleMessage.sample)
-                Host.serializer.serialize(h, out);
+        public void serialize(ForwardJoin joinRequest, ByteBuf out) throws IOException {
+                Host.serializer.serialize(joinRequest.getnewNode(), out);
+                out.writeInt(joinRequest.getTTL());
         }
 
         @Override
-        public SampleMessage deserialize(ByteBuf in) throws IOException {
-            int size = in.readInt();
-            Set<Host> subset = new HashSet<>(size, 1);
-            for (int i = 0; i < size; i++)
-                subset.add(Host.serializer.deserialize(in));
-            return new SampleMessage(subset);
+        public ForwardJoin deserialize(ByteBuf in) throws IOException {
+        	Host node = Host.serializer.deserialize(in);
+        	int ttl = in.readInt();
+            return new ForwardJoin(node,ttl);
         }
     };
+
+  
 }
