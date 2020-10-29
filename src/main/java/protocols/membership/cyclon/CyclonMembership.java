@@ -119,13 +119,12 @@ public class CyclonMembership extends GenericProtocol {
         //a connection. If the connection is successful, we add the peer to the membership (in the connectionUp callback)
         logger.debug("Received {} from {}", msg, from);
 
-        for (Host h : msg.getSample()) {
+        for (Host h : msg.getSample())
             if (!h.equals(self) && !membership.contains(h) && !pending.contains(h)) {
                 pending.add(h);
                 //Every channel operation is asynchronous! The result is returned in the form of channel events
                 openConnection(h);
             }
-        }
 
         sendSampleReply(from);
     }
@@ -133,13 +132,12 @@ public class CyclonMembership extends GenericProtocol {
     private void uponSampleReply(SampleMessageReply msg, Host from, short sourceProto, int channelId) {
         logger.debug("Received {} from {}", msg, from);
 
-        for (Host h : msg.getSample()) {
+        for (Host h : msg.getSample())
             if (!h.equals(self) && !membership.contains(h) && !pending.contains(h)) {
                 pending.add(h);
                 //Every channel operation is asynchronous! The result is returned in the form of channel events
                 openConnection(h);
             }
-        }
     }
 
     private void sendSampleReply(Host target){
