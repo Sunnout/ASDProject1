@@ -1,11 +1,7 @@
 package protocols.broadcast.eagerpush;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Properties;
-import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -20,6 +16,7 @@ import protocols.broadcast.eagerpush.messages.EagerPushMessage;
 import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
+import protocols.membership.full.SimpleFullMembership;
 
 public class EagerPushBroadcast extends GenericProtocol {
 	private static final Logger logger = LogManager.getLogger(EagerPushBroadcast.class);
@@ -103,37 +100,21 @@ public class EagerPushBroadcast extends GenericProtocol {
 			// Deliver the message to the application (even if it came from it)
 			triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
 
-			if (neighbours.size() > 0) {
-				Set<Host> sample = getNeighboursSample(from);
-				// Simply send the message to every known neighbour (who will then do the same)
-				sample.forEach(host -> {
-					logger.info("Sent {} to {}", msg, host);
-					sendMessage(msg, host);
-				});
-			}
+			//Deleted if
+			Set<Host> sample = getRandomSubsetExcluding(neighbours, fanout, from);
+			// Simply send the message to every known neighbour (who will then do the same)
+			sample.forEach(host -> {
+				logger.info("Sent {} to {}", msg, host);
+				sendMessage(msg, host);
+			});
 		}
 	}
 
-	private Set<Host> getNeighboursSample(Host from) {
-		int numberNeighbours = neighbours.size();
-		Random rand = new Random();
-		Set<Host> sample = new HashSet<>();
-		Host[] hosts = new Host[numberNeighbours];
-		neighbours.toArray(hosts);
-
-		if (numberNeighbours > fanout) {
-			while (sample.size() != fanout) {
-				Host host = hosts[rand.nextInt(numberNeighbours)];
-
-				if (!host.equals(from))
-					sample.add(host);
-			}
-		} else
-			// TODO: if someone only has less neighbours than fanout, needed?
-			// TODO: remove from??
-			return neighbours;
-
-		return sample;
+	private static Set<Host> getRandomSubsetExcluding(Set<Host> hostSet, int sampleSize, Host exclude) {
+		List<Host> list = new LinkedList<>(hostSet);
+		list.remove(exclude);
+		Collections.shuffle(list);
+		return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
 	}
 
 	private void uponMsgFail(ProtoMessage msg, Host host, short destProto, Throwable throwable, int channelId) {
