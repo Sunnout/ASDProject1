@@ -55,11 +55,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		this.myself = myself;
 		eagerPushPeers = new HashSet<>();
 		lazyPushPeers = new HashSet<>();
-
-		// TODO: onde buscar source proto para por aqui???
-		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0,
-				(short)0, new HashSet<>());
-
+		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
 		missing = new HashSet<>(); 
 		received = new HashSet<>();
 		missingMessageTimers = new HashMap<>();
@@ -120,8 +116,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		if (!channelReady)
 			return;
 
-		PlumtreeGossipMessage msg = new PlumtreeGossipMessage(request.getMsgId(), request.getSender(), 0,
-				sourceProto, request.getMsg());
+		PlumtreeGossipMessage msg = new PlumtreeGossipMessage(request.getMsgId(), request.getSender(), 0, request.getMsg());
 		eagerPushGossip(msg);
 		lazyPushGossip(msg);
 		triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
@@ -156,7 +151,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		} else {
 			eagerPushPeers.remove(msg.getSender());
 			lazyPushPeers.add(msg.getSender());
-			sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself, sourceProto), msg.getSender());
+			sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), msg.getSender());
 		}
 	}
 
@@ -243,9 +238,8 @@ public class PlumtreeBroadcast extends GenericProtocol {
 				int r = iHaveMsg.getRound();
 				int round = msg.getRound()-1;
 		        if(r < round && (round - r) >= THRESHOLD) {
-		        	// TODO: how to get source protos
-		        	sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, (short)0, null), iHaveMsg.getSender());
-					sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself, (short)0), msg.getSender());
+		        	sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, null), iHaveMsg.getSender());
+					sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), msg.getSender());
 		        }
 			}
 		});
@@ -290,8 +284,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 				eagerPushPeers.add(msg.getSender());
 				lazyPushPeers.remove(msg.getSender());
 				// TODO: no pseudo código aqui dizia para remover o primeiro announcement??
-				// TODO: get source proto for this
-				sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, msg.getRound(), (short)0,
+				sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, msg.getRound(),
 						missingMessageTimer.getMessageId()), msg.getSender());
 				break;
 			}

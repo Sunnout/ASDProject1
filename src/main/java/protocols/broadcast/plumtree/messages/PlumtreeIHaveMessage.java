@@ -15,7 +15,6 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
 
     private final UUID mid;
     private final Host sender;
-    private final short toDeliver;
     private final Set<UUID> messageIds; // Set of UUIDs of messages that sender has
     private int round;
 
@@ -26,12 +25,11 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
                 '}';
     }
 
-    public PlumtreeIHaveMessage(UUID mid, Host sender, int round, short toDeliver, Set<UUID> messageIds) {
+    public PlumtreeIHaveMessage(UUID mid, Host sender, int round, Set<UUID> messageIds) {
         super(MSG_ID);
         this.mid = mid;
         this.sender = sender;
         this.round = round;
-        this.toDeliver = toDeliver;
         this.messageIds = messageIds;
     }
 
@@ -50,10 +48,6 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
 
     public UUID getMid() {
         return mid;
-    }
-
-    public short getToDeliver() {
-        return toDeliver;
     }
     
     public Set<UUID> getMessageIds() {
@@ -79,7 +73,6 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
             out.writeLong(plumtreeIHaveMessage.mid.getLeastSignificantBits());
             Host.serializer.serialize(plumtreeIHaveMessage.sender, out);
             out.writeInt(plumtreeIHaveMessage.round);
-            out.writeShort(plumtreeIHaveMessage.toDeliver);
             out.writeInt(plumtreeIHaveMessage.messageIds.size());
             plumtreeIHaveMessage.messageIds.forEach(id -> {
             	out.writeLong(id.getMostSignificantBits());
@@ -95,13 +88,12 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
             UUID mid = new UUID(firstLong, secondLong);
             Host sender = Host.serializer.deserialize(in);
             int round = in.readInt();
-            short toDeliver = in.readShort();
             Set<UUID> messageIds = new HashSet<>();
             for(int i = 0; i < in.readInt(); i++) {
             	messageIds.add(new UUID(in.readLong(), in.readLong()));
             }
 
-            return new PlumtreeIHaveMessage(mid, sender, round, toDeliver, messageIds);
+            return new PlumtreeIHaveMessage(mid, sender, round, messageIds);
         }
     };
 }

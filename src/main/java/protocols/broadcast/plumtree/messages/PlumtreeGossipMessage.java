@@ -13,10 +13,7 @@ public class PlumtreeGossipMessage extends ProtoMessage {
 
     private final UUID mid;
     private final Host sender;
-
-    private final short toDeliver;
     private final byte[] content;
-    
     private int round;
 
     @Override
@@ -26,12 +23,11 @@ public class PlumtreeGossipMessage extends ProtoMessage {
                 '}';
     }
 
-    public PlumtreeGossipMessage(UUID mid, Host sender, int round, short toDeliver, byte[] content) {
+    public PlumtreeGossipMessage(UUID mid, Host sender, int round, byte[] content) {
         super(MSG_ID);
         this.mid = mid;
         this.sender = sender;
         this.round = round;
-        this.toDeliver = toDeliver;
         this.content = content;
     }
 
@@ -52,10 +48,6 @@ public class PlumtreeGossipMessage extends ProtoMessage {
         return mid;
     }
 
-    public short getToDeliver() {
-        return toDeliver;
-    }
-
     public byte[] getContent() {
         return content;
     }
@@ -67,7 +59,6 @@ public class PlumtreeGossipMessage extends ProtoMessage {
             out.writeLong(plumtreeGossipMessage.mid.getLeastSignificantBits());
             Host.serializer.serialize(plumtreeGossipMessage.sender, out);
             out.writeInt(plumtreeGossipMessage.round);
-            out.writeShort(plumtreeGossipMessage.toDeliver);
             out.writeInt(plumtreeGossipMessage.content.length);
             if (plumtreeGossipMessage.content.length > 0) {
                 out.writeBytes(plumtreeGossipMessage.content);
@@ -81,13 +72,12 @@ public class PlumtreeGossipMessage extends ProtoMessage {
             UUID mid = new UUID(firstLong, secondLong);
             Host sender = Host.serializer.deserialize(in);
             int round = in.readInt();
-            short toDeliver = in.readShort();
             int size = in.readInt();
             byte[] content = new byte[size];
             if (size > 0)
                 in.readBytes(content);
 
-            return new PlumtreeGossipMessage(mid, sender, round, toDeliver, content);
+            return new PlumtreeGossipMessage(mid, sender, round, content);
         }
     };
 }
