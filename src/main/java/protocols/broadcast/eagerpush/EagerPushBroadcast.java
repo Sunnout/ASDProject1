@@ -1,7 +1,13 @@
 package protocols.broadcast.eagerpush;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -16,7 +22,6 @@ import protocols.broadcast.eagerpush.messages.EagerPushMessage;
 import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
-import protocols.membership.full.SimpleFullMembership;
 
 public class EagerPushBroadcast extends GenericProtocol {
 	private static final Logger logger = LogManager.getLogger(EagerPushBroadcast.class);
@@ -28,10 +33,8 @@ public class EagerPushBroadcast extends GenericProtocol {
 	private final Host myself; // My own address/port
 	private final Set<Host> neighbours; // My known neighbours (a.k.a peers the membership protocol told me about)
 	private final Set<UUID> received; // Set of received messages (since we do not want to deliver the same msg twice)
-	private final int fanout; // Number of neighbours to gossip message to
+	private final int fanout; // Number of neighbours to send gossip message to
 
-	// We can only start sending messages after the membership protocol informed us
-	// that the channel is ready
 	private boolean channelReady;
 
 	public EagerPushBroadcast(Properties properties, Host myself) throws IOException, HandlerRegistrationException {
@@ -45,7 +48,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 		/*--------------------- Register Request Handlers ----------------------------- */
 		registerRequestHandler(BroadcastRequest.REQUEST_ID, this::uponBroadcastRequest);
 
-		/*--------------------- Register Notification Handlers ----------------------------- */
+		/*--------------------- Register Notification Handlers ------------------------- */
 		subscribeNotification(NeighbourUp.NOTIFICATION_ID, this::uponNeighbourUp);
 		subscribeNotification(NeighbourDown.NOTIFICATION_ID, this::uponNeighbourDown);
 		subscribeNotification(ChannelCreated.NOTIFICATION_ID, this::uponChannelCreated);
@@ -57,11 +60,9 @@ public class EagerPushBroadcast extends GenericProtocol {
 		// application
 	}
 
-	// Upon receiving the channelId from the membership, register our own callbacks
-	// and serializers
+	// Upon receiving the channelId from the membership, register callbacks and serializers
 	private void uponChannelCreated(ChannelCreated notification, short sourceProto) {
 		int cId = notification.getChannelId();
-		// Allows this protocol to receive events from this channel.
 		registerSharedChannel(cId);
 		/*---------------------- Register Message Serializers ---------------------- */
 		registerMessageSerializer(cId, EagerPushMessage.MSG_ID, EagerPushMessage.serializer);
@@ -73,48 +74,38 @@ public class EagerPushBroadcast extends GenericProtocol {
 			e.printStackTrace();
 			System.exit(1);
 		}
-		// Now we can start sending messages
 		channelReady = true;
 	}
 
 	/*--------------------------------- Requests ---------------------------------------- */
+	
 	private void uponBroadcastRequest(BroadcastRequest request, short sourceProto) {
 		if (!channelReady)
 			return;
 
-		// Create the message object.
 		EagerPushMessage msg = new EagerPushMessage(request.getMsgId(), request.getSender(), sourceProto,
 				request.getMsg());
 
-		// Call the same handler as when receiving a new FloodMessage (since the logic
-		// is the same)
+		// Call the same handler as when receiving a new EagerPushMessage
 		uponEagerPushMessage(msg, myself, getProtoId(), -1);
 	}
 
 	/*--------------------------------- Messages ---------------------------------------- */
+	
 	private void uponEagerPushMessage(EagerPushMessage msg, Host from, short sourceProto, int channelId) {
 		logger.info("Received {} from {}", msg, from);
-		// If we already received it once, do nothing (or we would end up with a nasty
-		// infinite loop)
+		// If we already received it once, do nothing
 		if (received.add(msg.getMid())) {
-			// Deliver the message to the application (even if it came from it)
+			// Deliver the message to the application
 			triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
 
-			//Deleted if
 			Set<Host> sample = getRandomSubsetExcluding(neighbours, fanout, from);
-			// Simply send the message to every known neighbour (who will then do the same)
+			// Simply send the message to a subset of size fanout of known neighbours
 			sample.forEach(host -> {
 				logger.info("Sent {} to {}", msg, host);
 				sendMessage(msg, host);
 			});
 		}
-	}
-
-	private static Set<Host> getRandomSubsetExcluding(Set<Host> hostSet, int sampleSize, Host exclude) {
-		List<Host> list = new LinkedList<>(hostSet);
-		list.remove(exclude);
-		Collections.shuffle(list);
-		return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
 	}
 
 	private void uponMsgFail(ProtoMessage msg, Host host, short destProto, Throwable throwable, int channelId) {
@@ -123,10 +114,19 @@ public class EagerPushBroadcast extends GenericProtocol {
 		logger.error("Message {} to {} failed, reason: {}", msg, host, throwable);
 	}
 
+	
+	/*----------------------------------- Procedures ----------------------------------------- */
+
+	private static Set<Host> getRandomSubsetExcluding(Set<Host> hostSet, int sampleSize, Host exclude) {
+		List<Host> list = new LinkedList<>(hostSet);
+		list.remove(exclude);
+		Collections.shuffle(list);
+		return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
+	}
+
+
 	/*--------------------------------- Notifications ---------------------------------------- */
 
-	// When the membership protocol notifies of a new neighbour (or leaving one)
-	// simply update my list of neighbours.
 	private void uponNeighbourUp(NeighbourUp notification, short sourceProto) {
 		for (Host h : notification.getNeighbours()) {
 			neighbours.add(h);
