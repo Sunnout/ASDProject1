@@ -68,7 +68,6 @@ public class CyclonMembership extends GenericProtocol {
         /*---------------------- Register Message Handlers -------------------------- */
         registerMessageHandler(channelId, SampleMessage.MSG_ID, this::uponSample, this::uponMsgFail);
         registerMessageHandler(channelId, SampleMessageReply.MSG_ID, this::uponSampleReply, this::uponMsgFail);
-        //TODO add message where returns other sample
 
         /*--------------------- Register Timer Handlers ----------------------------- */
         registerTimerHandler(SampleTimer.TIMER_ID, this::uponSampleTimer);
