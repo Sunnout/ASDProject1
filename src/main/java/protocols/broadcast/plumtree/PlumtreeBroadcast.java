@@ -29,7 +29,6 @@ import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
 
-// TODO: need to add logger traces when sending and receiving
 public class PlumtreeBroadcast extends GenericProtocol {
 	private static final Logger logger = LogManager.getLogger(PlumtreeBroadcast.class);
 
@@ -50,7 +49,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private final Set<Host> lazyPushPeers; // Neighbours with which to use lazy push gossip
 	private PlumtreeIHaveMessage lazyIHaveMessage; // IHAVE msg with announcements to be sent
 	private final HashMap<UUID, List<Announcement>> missingMessages; // Hashmap of missing msg ids to list of announcements
-	private final Set<UUID> received; // Set of UUIDs of received messages
+	private final HashMap<UUID, PlumtreeGossipMessage> received; // Hashmap of UUIDs to received messages
 	private final HashMap<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
 	private boolean channelReady;
 
@@ -61,7 +60,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		lazyPushPeers = new HashSet<>();
 		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
 		missingMessages = new HashMap<>();
-		received = new HashSet<>();
+		received = new HashMap<>();
 		missingMessageTimers = new HashMap<>();
 		channelReady = false;
 
@@ -124,18 +123,19 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		eagerPushGossip(msg);
 		lazyPushGossip(msg);
 		triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
-		received.add(msg.getMid());
+		received.put(msg.getMid(), msg);
 	}
 
 
 	/*--------------------------------- Messages ---------------------------------------- */
 
 	private void uponPlumtreeGossipMessage(PlumtreeGossipMessage msg, Host from, short sourceProto, int channelId) {
-		logger.trace("Received {} from {}", msg, from);
+		logger.trace("Received Gossip {} from {}", msg, from);
 
 		UUID mid = msg.getMid();
 
-		if (received.add(mid)) {
+		if (!received.containsKey(mid)) {
+			received.put(mid, msg);
 			triggerNotification(new DeliverNotification(mid, from, msg.getContent()));
 
 			if(missingMessages.remove(mid) != null) {
@@ -147,18 +147,22 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			lazyPushGossip(msg);
 			eagerPushPeers.add(from);
 			lazyPushPeers.remove(from);
-			optimization(msg, from);
+			//optimization(msg, from);
 
 		} else if (!from.equals(myself)) {
 			eagerPushPeers.remove(from);
 			lazyPushPeers.add(from);
 			sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), from);
+			logger.info("Sent Prune {} to {}", msg, from);
+
 		}
 	}
 
 	private void uponPlumtreeIHaveMessage(PlumtreeIHaveMessage msg, Host from, short sourceProto, int channelId) {
+		logger.trace("Received IHave {} from {}", msg, from);
+
 		msg.getMessageIds().forEach(id -> {
-			if (!received.contains(id) && !missingMessageTimers.containsKey(id)) {
+			if (!received.containsKey(id) && !missingMessageTimers.containsKey(id)) {
 				List<Announcement> announcements = new ArrayList<Announcement>();
 				announcements.add(new Announcement(from, msg.getRound()));
 				missingMessages.put(id, announcements);
@@ -170,15 +174,23 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	}
 
 	private void uponPlumtreePruneMessage(PlumtreePruneMessage msg, Host from, short sourceProto, int channelId) {
+		logger.trace("Received Prune {} from {}", msg, from);
+
 		eagerPushPeers.remove(from);
 		lazyPushPeers.add(from);
 	}
 
 	private void uponPlumtreeGraftMessage(PlumtreeGraftMessage msg, Host from, short sourceProto, int channelId) {
+		logger.trace("Received Graft {} from {}", msg, from);
+
+		UUID mid = msg.getMid();
 		eagerPushPeers.add(from);
 		lazyPushPeers.remove(from);
-		if (received.contains(msg.getMid()))
-			sendMessage(msg, from);
+		if (received.containsKey(mid)) {
+			//TODO: esta bem?? ou preciso de criar gossip nova comigo no sender?
+			sendMessage(received.get(mid), from);
+			logger.info("Sent Gossip {} to {}", msg, from);
+		}
 	}
 
 	private void uponMsgFail(ProtoMessage msg, Host host, short destProto, Throwable throwable, int channelId) {
@@ -226,7 +238,9 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			Host sender = announcement.getSender();
 			eagerPushPeers.add(sender);
 			lazyPushPeers.remove(sender);
-			sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, announcement.getRound(), mid), sender);
+			PlumtreeGraftMessage msg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, announcement.getRound(), mid);
+			sendMessage(msg, sender);
+			logger.info("Sent Graft {} to {}", msg, sender);
 		}
 	}
 
@@ -237,8 +251,8 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 		eagerPushPeers.forEach(host -> {
 			if (!host.equals(myself)) {
-				logger.trace("Sent {} to {}", msg, myself);
 				sendMessage(msg, host);
+				logger.trace("Sent Gossip {} to {}", msg, host);
 			}
 		});
 	}
@@ -253,6 +267,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		lazyPushPeers.forEach(host -> {
 			if (!host.equals(myself)) {
 				sendMessage(lazyIHaveMessage, host);
+				logger.info("Sent IHave {} to {}", lazyIHaveMessage, host);
 			}
 		});
 
@@ -263,6 +278,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		lazyPushPeers.forEach(host -> {
 			if (!host.equals(myself)) {
 				sendMessage(lazyIHaveMessage, host);
+				logger.info("Sent IHave {} to {}", lazyIHaveMessage, host);
 			}
 		});
 
@@ -284,9 +300,15 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		if(announcement != null) {
 			int r = announcement.getRound();
 			int round = msg.getRound()-1;
+			Host sender = announcement.getSender();
 			if(r < round && (round - r) >= THRESHOLD) {
-				sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, null), announcement.getSender());
-				sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), from);
+				PlumtreeGraftMessage graftMsg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, null);
+				sendMessage(graftMsg, sender);
+				logger.info("Sent Graft {} to {}", graftMsg, sender);
+
+				PlumtreePruneMessage pruneMsg = new PlumtreePruneMessage(UUID.randomUUID(), myself);
+				sendMessage(pruneMsg, from);
+				logger.info("Sent Prune {} to {}", pruneMsg, from);
 			}
 		}
 	}
