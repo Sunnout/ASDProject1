@@ -97,9 +97,10 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		registerMessageSerializer(cId, PlumtreeGraftMessage.MSG_ID, PlumtreeGraftMessage.serializer);
 
 		/*---------------------- Register Message Handlers -------------------------- */
+
 		try {
-			registerMessageHandler(cId, PlumtreeGossipMessage.MSG_ID, this::uponPlumtreeGossipMessage,
-					this::uponMsgFail);
+
+			registerMessageHandler(cId, PlumtreeGossipMessage.MSG_ID, this::uponPlumtreeGossipMessage, this::uponMsgFail);
 			registerMessageHandler(cId, PlumtreeIHaveMessage.MSG_ID, this::uponPlumtreeIHaveMessage, this::uponMsgFail);
 			registerMessageHandler(cId, PlumtreePruneMessage.MSG_ID, this::uponPlumtreePruneMessage, this::uponMsgFail);
 			registerMessageHandler(cId, PlumtreeGraftMessage.MSG_ID, this::uponPlumtreeGraftMessage, this::uponMsgFail);
@@ -133,10 +134,9 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		logger.trace("Received {} from {}", msg, from);
 
 		UUID mid = msg.getMid();
-		Host sender = msg.getSender();
 
 		if (received.add(mid)) {
-			triggerNotification(new DeliverNotification(mid, sender, msg.getContent()));
+			triggerNotification(new DeliverNotification(mid, from, msg.getContent()));
 
 			if(missingMessages.remove(mid) != null) {
 				cancelTimer(missingMessageTimers.get(mid));
@@ -145,19 +145,18 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			msg.incrementRound();
 			eagerPushGossip(msg);
 			lazyPushGossip(msg);
-			eagerPushPeers.add(sender);
-			lazyPushPeers.remove(sender);
-			optimization(msg);
+			eagerPushPeers.add(from);
+			lazyPushPeers.remove(from);
+			optimization(msg, from);
 
-		} else {
-			eagerPushPeers.remove(sender);
-			lazyPushPeers.add(sender);
-			sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), sender);
+		} else if (!from.equals(myself)) {
+			eagerPushPeers.remove(from);
+			lazyPushPeers.add(from);
+			sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), from);
 		}
 	}
 
 	private void uponPlumtreeIHaveMessage(PlumtreeIHaveMessage msg, Host from, short sourceProto, int channelId) {
-		// TODO ver se está bem
 		msg.getMessageIds().forEach(id -> {
 			if (!received.contains(id) && !missingMessageTimers.containsKey(id)) {
 				List<Announcement> announcements = new ArrayList<Announcement>();
@@ -171,82 +170,19 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	}
 
 	private void uponPlumtreePruneMessage(PlumtreePruneMessage msg, Host from, short sourceProto, int channelId) {
-		eagerPushPeers.remove(msg.getSender());
-		lazyPushPeers.add(msg.getSender());
+		eagerPushPeers.remove(from);
+		lazyPushPeers.add(from);
 	}
 
 	private void uponPlumtreeGraftMessage(PlumtreeGraftMessage msg, Host from, short sourceProto, int channelId) {
-		eagerPushPeers.add(msg.getSender());
-		lazyPushPeers.remove(msg.getSender());
+		eagerPushPeers.add(from);
+		lazyPushPeers.remove(from);
 		if (received.contains(msg.getMid()))
-			sendMessage(msg, msg.getSender());
+			sendMessage(msg, from);
 	}
 
 	private void uponMsgFail(ProtoMessage msg, Host host, short destProto, Throwable throwable, int channelId) {
 		logger.error("Message {} to {} failed, reason: {}", msg, host, throwable);
-	}
-
-
-	/*----------------------------------- Procedures -------------------------------------- */
-
-	private void eagerPushGossip(PlumtreeGossipMessage msg) {
-
-		eagerPushPeers.forEach(host -> {
-			if (!host.equals(myself)) {
-				logger.trace("Sent {} to {}", msg, myself);
-				sendMessage(msg, host);
-			}
-		});
-	}
-
-	private void lazyPushGossip(PlumtreeGossipMessage msg) {
-
-		lazyIHaveMessage.addMessageId(msg.getMid());
-		simpleAnnouncementPolicy();
-
-	}
-
-	private void simpleAnnouncementPolicy() {
-		lazyPushPeers.forEach(h -> {
-			sendMessage(lazyIHaveMessage, myself);
-		});
-
-		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
-	}
-
-	private void notSoSimpleAnnouncementPolicy() {
-		lazyPushPeers.forEach(h -> {
-			sendMessage(lazyIHaveMessage, myself);
-		});
-
-		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
-
-		/*
-		 * TODO: Juntar lista de uuids na ihavemessage e criar um timer que
-		 * periodicamente envia todas as que existem mas, se houverem
-		 * mudanças no lazyPushPeers (add ou remove) tem de se enviar
-		 * tudo antes de adicionar ou remover. Criar um boolean que diz
-		 * se naquele periodo do timer já enviou entretanto sem ser por
-		 * culpa do timer, se sim, não envia, senão envia.
-		 */
-	}
-
-	private void optimization(PlumtreeGossipMessage msg) {
-		// TODO: tenho de verificar nulls?
-		List<Announcement> announcementList = missingMessages.get(msg.getMid());
-		if(announcementList != null) {
-			announcementList.sort(new SortAnnouncementByRound());
-			Announcement announcement = announcementList.get(0);
-
-			if(announcement != null) {
-				int r = announcement.getRound();
-				int round = msg.getRound()-1;
-				if(r < round && (round - r) >= THRESHOLD) {
-					sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, null), announcement.getSender());
-					sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), msg.getSender());
-				}
-			}
-		}
 	}
 
 
@@ -284,18 +220,85 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		long timer = setupTimer(new MissingMessageTimer(mid), SHORTER_MISSING_TIMEOUT);
 		missingMessageTimers.put(mid, timer);
 
-		// TODO: tenho de verificar nulls?
-		List<Announcement> announcementList = missingMessages.get(mid);
-		if(announcementList != null) {
-			announcementList.sort(new SortAnnouncementByRound());
-			Announcement announcement = announcementList.remove(0);
+		Announcement announcement = getFirstAnnouncement(mid);
 
-			if(announcement != null) {
-				Host sender = announcement.getSender();
-				eagerPushPeers.add(sender);
-				lazyPushPeers.remove(sender);
-				sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, announcement.getRound(), mid), sender);
+		if(announcement != null) {
+			Host sender = announcement.getSender();
+			eagerPushPeers.add(sender);
+			lazyPushPeers.remove(sender);
+			sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, announcement.getRound(), mid), sender);
+		}
+	}
+
+
+	/*----------------------------------- Procedures -------------------------------------- */
+
+	private void eagerPushGossip(PlumtreeGossipMessage msg) {
+
+		eagerPushPeers.forEach(host -> {
+			if (!host.equals(myself)) {
+				logger.trace("Sent {} to {}", msg, myself);
+				sendMessage(msg, host);
+			}
+		});
+	}
+
+	private void lazyPushGossip(PlumtreeGossipMessage msg) {
+		lazyIHaveMessage.addMessageId(msg.getMid());
+		simpleAnnouncementPolicy();
+
+	}
+
+	private void simpleAnnouncementPolicy() {
+		lazyPushPeers.forEach(host -> {
+			if (!host.equals(myself)) {
+				sendMessage(lazyIHaveMessage, host);
+			}
+		});
+
+		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
+	}
+
+	private void notSoSimpleAnnouncementPolicy() {
+		lazyPushPeers.forEach(host -> {
+			if (!host.equals(myself)) {
+				sendMessage(lazyIHaveMessage, host);
+			}
+		});
+
+		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
+
+		/*
+		 * TODO: Juntar lista de uuids na ihavemessage e criar um timer que
+		 * periodicamente envia todas as que existem mas, se houverem
+		 * mudanças no lazyPushPeers (add ou remove) tem de se enviar
+		 * tudo antes de adicionar ou remover. Criar um boolean que diz
+		 * se naquele periodo do timer já enviou entretanto sem ser por
+		 * culpa do timer, se sim, não envia, senão envia.
+		 */
+	}
+
+	private void optimization(PlumtreeGossipMessage msg, Host from) {
+		Announcement announcement = getFirstAnnouncement(msg.getMid());
+
+		if(announcement != null) {
+			int r = announcement.getRound();
+			int round = msg.getRound()-1;
+			if(r < round && (round - r) >= THRESHOLD) {
+				sendMessage(new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, null), announcement.getSender());
+				sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), from);
 			}
 		}
 	}
+
+	private Announcement getFirstAnnouncement(UUID mid) {
+		Announcement a = null;
+		List<Announcement> announcementList = missingMessages.get(mid);
+		if(announcementList != null) {
+			announcementList.sort(new SortAnnouncementByRound());
+			a = announcementList.get(0);
+		}
+		return a;
+	}
+
 }

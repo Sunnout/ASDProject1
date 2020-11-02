@@ -8,6 +8,7 @@ import babel.core.Babel;
 import network.data.Host;
 import protocols.apps.BroadcastApp;
 import protocols.broadcast.eagerpush.EagerPushBroadcast;
+import protocols.broadcast.plumtree.PlumtreeBroadcast;
 import protocols.membership.full.SimpleFullMembership;
 import utils.InterfaceToIp;
 
@@ -45,10 +46,11 @@ public class Main {
         logger.info("Hello, I am {}", myself);
 
         // Application
-        BroadcastApp broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
+        BroadcastApp broadcastApp = new BroadcastApp(myself, props, PlumtreeBroadcast.PROTOCOL_ID);
         // Broadcast Protocol
 //        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
-        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
+//        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
+        PlumtreeBroadcast broadcast = new PlumtreeBroadcast(props, myself);
         // Membership Protocol
         SimpleFullMembership membership = new SimpleFullMembership(props, myself);
 
