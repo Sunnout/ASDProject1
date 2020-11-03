@@ -101,7 +101,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 
 			if (neighbours.size() > 0) {
 				Set<Host> sample = getNeighboursSample(from);
-				// Simply send the message to every known neighbour (who will then do the same)
+				// Simply send the message to sample neighbours (who will then do the same)
 				sample.forEach(host -> {
 					logger.info("Sent {} to {}", msg, host);
 					sendMessage(msg, host);

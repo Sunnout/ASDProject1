@@ -38,6 +38,9 @@ public class CyclonMembership extends GenericProtocol {
 
     private final int channelId; //Id of the created channel
 
+    private Host lastSentHost;
+    private Set<Host> lastSentSample;
+
     public CyclonMembership(Properties props, Host self) throws IOException, HandlerRegistrationException {
         super(PROTOCOL_NAME, PROTOCOL_ID);
 
@@ -45,6 +48,8 @@ public class CyclonMembership extends GenericProtocol {
         this.membership = new HashSet<>();
         this.pending = new HashSet<>();
         this.membersAge = new HashMap<>();
+        this.lastSentHost = null;
+        this.lastSentSample = new HashSet<>();
 
         //Get some configurations from the Properties object
         this.subsetSize = Integer.parseInt(props.getProperty("sample_size", "6"));
@@ -114,39 +119,46 @@ public class CyclonMembership extends GenericProtocol {
     }
 
     /*--------------------------------- Messages ---------------------------------------- */
+    //The process received a sample from another process
     private void uponSample(SampleMessage msg, Host from, short sourceProto, int channelId) {
         //Received a sample from a peer. We add all the unknown peers to the "pending" map and attempt to establish
         //a connection. If the connection is successful, we add the peer to the membership (in the connectionUp callback)
         logger.debug("Received {} from {}", msg, from);
-
-        for (Host h : msg.getSample())
-            if (!h.equals(self) && !membership.contains(h) && !pending.contains(h)) {
-                pending.add(h);
-                //Every channel operation is asynchronous! The result is returned in the form of channel events
-                openConnection(h);
-            }
-
+        openConnections(msg.getSample());
         sendSampleReply(from);
     }
 
-    private void uponSampleReply(SampleMessageReply msg, Host from, short sourceProto, int channelId) {
-        logger.debug("Received {} from {}", msg, from);
-
-        for (Host h : msg.getSample())
-            if (!h.equals(self) && !membership.contains(h) && !pending.contains(h)) {
-                pending.add(h);
-                //Every channel operation is asynchronous! The result is returned in the form of channel events
-                openConnection(h);
-            }
-    }
-
+    //Sends a sample reply to the process that sent a sample
     private void sendSampleReply(Host target){
         Set<Host> subset = getRandomSubsetExcluding(membership, subsetSize, target);
         subset.add(self);
         sendMessage(new SampleMessageReply(subset), target);
-
-        //Do this now or save the set and wait for the sample reply?
         removeSampleFromNeighbours(subset);
+    }
+
+    //The process received a sample reply from another process
+    private void uponSampleReply(SampleMessageReply msg, Host from, short sourceProto, int channelId) {
+        logger.debug("Received {} from {}", msg, from);
+
+        if(from == lastSentHost){
+            openConnections(msg.getSample());
+            removeSampleFromNeighbours(lastSentSample);
+            lastSentHost = null;
+            lastSentSample.clear();
+
+        } else
+            logger.debug("{} from {} is late, skipping sample reply", msg, from);
+
+    }
+
+    //Opens connections to a set of hosts and adds them to the pending set
+    private void openConnections(Set<Host> hosts){
+        for (Host h : hosts)
+            if (!h.equals(self) && !membership.contains(h) && !pending.contains(h)) {
+                pending.add(h);
+                //Every channel operation is asynchronous! The result is returned in the form of channel events
+                openConnection(h);
+            }
     }
 
     private void uponMsgFail(ProtoMessage msg, Host host, short destProto,
@@ -156,13 +168,14 @@ public class CyclonMembership extends GenericProtocol {
     }
 
     /*--------------------------- Membership Management ------------------------------ */
-
     //Removes a set of neighbours from membership set
     private void removeSampleFromNeighbours(Set<Host> hostsToRemove){
         for(Host h: hostsToRemove){
-            membership.remove(h);
-            membersAge.remove(h);
-            closeConnection(h);
+            if(h != self){
+                membership.remove(h);
+                membersAge.remove(h);
+                closeConnection(h);
+            }
         }
     }
 
@@ -199,8 +212,9 @@ public class CyclonMembership extends GenericProtocol {
     }
 
     /*--------------------------------- Timers ---------------------------------------- */
+
+    //When the SampleTimer is triggered, get the oldest peer in the membership and send a sample
     private void uponSampleTimer(SampleTimer timer, long timerId) {
-        //When the SampleTimer is triggered, get a random peer in the membership and send a sample
         logger.debug("Sample Time: membership{}", membership);
         if (membership.size() > 0) {
             increaseAge(membership);
@@ -214,9 +228,8 @@ public class CyclonMembership extends GenericProtocol {
         Set<Host> subset = getRandomSubsetExcluding(membership, subsetSize, target);
         subset.add(self);
         sendMessage(new SampleMessage(subset), target);
-
-        //Do this now or save the set and wait for the sample reply?
-        removeSampleFromNeighbours(subset);
+        lastSentSample = subset;
+        lastSentHost = target;
     }
     /* --------------------------------- TCPChannel Events ---------------------------- */
 
