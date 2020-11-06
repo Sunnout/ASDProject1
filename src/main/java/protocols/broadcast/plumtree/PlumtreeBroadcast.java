@@ -39,8 +39,8 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	// Protocol parameters
 	// TODO: como escolher timeout?
 	// TODO: how to define threshold value
-	public static final int LONGER_MISSING_TIMEOUT = 5000;
-	public static final int SHORTER_MISSING_TIMEOUT = 3000;
+	public static final int LONGER_MISSING_TIMEOUT = 500;
+	public static final int SHORTER_MISSING_TIMEOUT = 400;
 	public static final int THRESHOLD = 4;
 
 
@@ -152,8 +152,9 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		} else if (!from.equals(myself)) {
 			eagerPushPeers.remove(from);
 			lazyPushPeers.add(from);
-			sendMessage(new PlumtreePruneMessage(UUID.randomUUID(), myself), from);
-			logger.info("Sent Prune {} to {}", msg, from);
+			PlumtreePruneMessage pruneMsg = new PlumtreePruneMessage(UUID.randomUUID(), myself);
+			sendMessage(pruneMsg, from);
+			logger.info("Sent Prune {} to {}", pruneMsg, from);
 
 		}
 	}
