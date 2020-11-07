@@ -89,7 +89,8 @@ public class PlumtreeIHaveMessage extends ProtoMessage {
             Host sender = Host.serializer.deserialize(in);
             int round = in.readInt();
             Set<UUID> messageIds = new HashSet<>();
-            for(int i = 0; i < in.readInt(); i++) {
+            int size = in.readInt();
+            for(int i = 0; i < size; i++) {
             	messageIds.add(new UUID(in.readLong(), in.readLong()));
             }
 
