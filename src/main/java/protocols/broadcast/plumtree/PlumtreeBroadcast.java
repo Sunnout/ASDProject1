@@ -25,9 +25,11 @@ import protocols.broadcast.plumtree.messages.PlumtreeGraftMessage;
 import protocols.broadcast.plumtree.messages.PlumtreeIHaveMessage;
 import protocols.broadcast.plumtree.messages.PlumtreePruneMessage;
 import protocols.broadcast.plumtree.timers.MissingMessageTimer;
+import protocols.broadcast.plumtree.timers.SendAnnouncementsTimer;
 import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
+import protocols.membership.full.timers.SampleTimer;
 
 public class PlumtreeBroadcast extends GenericProtocol {
 	private static final Logger logger = LogManager.getLogger(PlumtreeBroadcast.class);
@@ -37,6 +39,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	public static final short PROTOCOL_ID = 600;
 
 	// Protocol parameters
+	public static final int ANNOUNCEMENT_TIMEOUT = 2000;
 	public static final int LONGER_MISSING_TIMEOUT = 500;
 	public static final int SHORTER_MISSING_TIMEOUT = 400;
 	public static final int THRESHOLD = 4;
@@ -51,6 +54,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private final HashMap<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
 	private final Set<UUID> alreadyGrafted;
 	private boolean channelReady;
+	private boolean sentAnnouncements;
 
 	public PlumtreeBroadcast(Properties properties, Host myself) throws IOException, HandlerRegistrationException {
 		super(PROTOCOL_NAME, PROTOCOL_ID);
@@ -63,6 +67,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		missingMessageTimers = new HashMap<>();
 		alreadyGrafted = new HashSet<>();
 		channelReady = false;
+		sentAnnouncements = false;
 
 		/*--------------------- Register Request Handlers ----------------------------- */
 		registerRequestHandler(BroadcastRequest.REQUEST_ID, this::uponBroadcastRequest);
@@ -74,14 +79,13 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 		/*--------------------- Register Timer Handlers ----------------------------- */
 		registerTimerHandler(MissingMessageTimer.TIMER_ID, this::uponMissingMessageTimer);
+		registerTimerHandler(SendAnnouncementsTimer.TIMER_ID, this::uponSendAnnouncementsTimer);
 	}
 
 	@Override
 	public void init(Properties props) {
-		/*
-		 * Init é para inicializar timers ou buscar configs que só estão
-		 * definidas depois dos protocolos terem sido todos inicializados
-		 */
+		//Setup the timer used to send compact announcements
+		setupPeriodicTimer(new SendAnnouncementsTimer(), ANNOUNCEMENT_TIMEOUT, ANNOUNCEMENT_TIMEOUT);
 	}
 
 	// Upon receiving the channelId from the membership, register callbacks and serializers
@@ -133,7 +137,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		logger.info("Received Gossip {} from {}", msg, from);
 
 		UUID mid = msg.getMid();
-		
+
 		if (!received.containsKey(mid)) {
 			received.put(mid, msg);
 			triggerNotification(new DeliverNotification(mid, from, msg.getContent()));
@@ -152,7 +156,10 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 		} else if (!from.equals(myself) && eagerPushPeers.size() > 1) {
 			eagerPushPeers.remove(from);
+			// Send announcements before adding new lazy push neighbour 
+			notSoSimpleAnnouncementPolicy();
 			lazyPushPeers.add(from);
+
 			PlumtreePruneMessage pruneMsg = new PlumtreePruneMessage(UUID.randomUUID(), myself);
 			sendMessage(pruneMsg, from);
 			logger.info("Sent Prune {} to {}", pruneMsg, from);
@@ -179,6 +186,8 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		logger.info("Received Prune {} from {}", msg, from);
 
 		eagerPushPeers.remove(from);
+		// Send announcements before adding new lazy push neighbour 
+		notSoSimpleAnnouncementPolicy();
 		lazyPushPeers.add(from);
 	}
 
@@ -243,7 +252,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 				Host sender = announcement.getSender();
 				eagerPushPeers.add(sender);
 				lazyPushPeers.remove(sender);
-				
+
 				PlumtreeGraftMessage graftMsg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, announcement.getRound(), mid);
 				sendMessage(graftMsg, sender);
 				logger.info("Sent Graft {} to {}", mid, sender);
@@ -266,6 +275,14 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		}
 	}
 
+	private void uponSendAnnouncementsTimer(SendAnnouncementsTimer sendAnnouncementsTimer, long timerId) {
+		// Send announcements only if they weren't sent before in this period
+		if(!sentAnnouncements)
+			notSoSimpleAnnouncementPolicy();
+
+		sentAnnouncements = false;
+	}
+
 
 	/*----------------------------------- Procedures -------------------------------------- */
 
@@ -281,8 +298,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	private void lazyPushGossip(PlumtreeGossipMessage msg) {
 		lazyIHaveMessage.addMessageId(msg.getMid());
-		simpleAnnouncementPolicy();
-
+		//simpleAnnouncementPolicy();
 	}
 
 	private void simpleAnnouncementPolicy() {
@@ -297,23 +313,17 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	}
 
 	private void notSoSimpleAnnouncementPolicy() {
-		lazyPushPeers.forEach(host -> {
-			if (!host.equals(myself)) {
-				sendMessage(lazyIHaveMessage, host);
-				logger.info("Sent IHave {} to {}", lazyIHaveMessage, host);
-			}
-		});
+		if(!lazyIHaveMessage.getMessageIds().isEmpty()) {
+			lazyPushPeers.forEach(host -> {
+				if (!host.equals(myself)) {
+					sendMessage(lazyIHaveMessage, host);
+					logger.info("Sent IHave {} to {}", lazyIHaveMessage, host);
+				}
+			});
 
-		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
-
-		/*
-		 * TODO: Juntar lista de uuids na ihavemessage e criar um timer que
-		 * periodicamente envia todas as que existem mas, se houverem
-		 * mudanças no lazyPushPeers (add ou remove) tem de se enviar
-		 * tudo antes de adicionar ou remover. Criar um boolean que diz
-		 * se naquele periodo do timer já enviou entretanto sem ser por
-		 * culpa do timer, se sim, não envia, senão envia.
-		 */
+			lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
+			sentAnnouncements = true;
+		}
 	}
 
 	private void optimization(PlumtreeGossipMessage msg, Host from) {
@@ -336,7 +346,6 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	}
 
 	private Announcement removeFirstAnnouncement(UUID mid) {
-		// TODO: should I remove the announcement?
 		Announcement a = null;
 		List<Announcement> announcementList = missingMessages.get(mid);
 		if(announcementList != null) {
