@@ -40,10 +40,10 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	// Protocol parameters
 	public static final int ANNOUNCEMENT_TIMEOUT = 2000;
+	// TODO: define announce timeout value
 	public static final int LONGER_MISSING_TIMEOUT = 500;
 	public static final int SHORTER_MISSING_TIMEOUT = 400;
-	public static final int THRESHOLD = 4;
-	// TODO: define threshold value by measuring tree depth
+	public static final int THRESHOLD = 3;
 
 	private final Host myself; // My own address/port
 	private final Set<Host> eagerPushPeers; // Neighbours with which to use eager push gossip
@@ -88,7 +88,6 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		setupPeriodicTimer(new SendAnnouncementsTimer(), ANNOUNCEMENT_TIMEOUT, ANNOUNCEMENT_TIMEOUT);
 	}
 
-	// Upon receiving the channelId from the membership, register callbacks and serializers
 	private void uponChannelCreated(ChannelCreated notification, short sourceProto) {
 		int cId = notification.getChannelId();
 		registerSharedChannel(cId);
@@ -135,7 +134,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	private void uponPlumtreeGossipMessage(PlumtreeGossipMessage msg, Host from, short sourceProto, int channelId) {
 		logger.info("Received Gossip {} from {}", msg, from);
-
+		System.out.println("Round: " + msg.getRound());
 		UUID mid = msg.getMid();
 
 		if (!received.containsKey(mid)) {
