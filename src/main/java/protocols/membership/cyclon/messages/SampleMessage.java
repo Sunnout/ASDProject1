@@ -4,23 +4,23 @@ import babel.generic.ProtoMessage;
 import io.netty.buffer.ByteBuf;
 import network.ISerializer;
 import network.data.Host;
+import protocols.membership.cyclon.components.Connection;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 public class SampleMessage extends ProtoMessage {
 
     public final static short MSG_ID = 1001;
 
-    private final Set<Host> sample;
+    private final List<Connection> sample;
 
-    public SampleMessage(Set<Host> sample) {
+    public SampleMessage(List<Connection> sample) {
         super(MSG_ID);
         this.sample = sample;
     }
 
-    public Set<Host> getSample() {
+    public List<Connection> getSample() {
         return sample;
     }
 
@@ -35,16 +35,18 @@ public class SampleMessage extends ProtoMessage {
         @Override
         public void serialize(SampleMessage sampleMessage, ByteBuf out) throws IOException {
             out.writeInt(sampleMessage.sample.size());
-            for (Host h : sampleMessage.sample)
-                Host.serializer.serialize(h, out);
+            for (Connection con : sampleMessage.sample) {
+                Host.serializer.serialize(con.getHost(), out);
+                out.writeInt(con.getAge());
+            }
         }
 
         @Override
         public SampleMessage deserialize(ByteBuf in) throws IOException {
             int size = in.readInt();
-            Set<Host> subset = new HashSet<>(size, 1);
+            List<Connection> subset = new ArrayList<>(size);
             for (int i = 0; i < size; i++)
-                subset.add(Host.serializer.deserialize(in));
+                subset.add(new Connection(Host.serializer.deserialize(in), in.readInt()));
             return new SampleMessage(subset);
         }
     };
