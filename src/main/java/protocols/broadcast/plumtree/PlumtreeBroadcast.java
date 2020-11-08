@@ -15,7 +15,6 @@ import org.apache.logging.log4j.Logger;
 import babel.core.GenericProtocol;
 import babel.exceptions.HandlerRegistrationException;
 import babel.generic.ProtoMessage;
-import channel.tcp.events.ChannelMetrics;
 import network.data.Host;
 import protocols.broadcast.common.BroadcastRequest;
 import protocols.broadcast.common.DeliverNotification;
@@ -315,7 +314,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	}
 
 	private void optimization(PlumtreeGossipMessage msg, Host from) {
-		Announcement announcement = removeFirstAnnouncement(msg.getMid());
+		Announcement announcement = getFirstAnnouncement(msg.getMid());
 
 		if(announcement != null) {
 			int r = announcement.getRound();
@@ -331,6 +330,17 @@ public class PlumtreeBroadcast extends GenericProtocol {
 				logger.info("Sent Prune {} to {}", pruneMsg, from);
 			}
 		}
+	}
+	
+	private Announcement getFirstAnnouncement(UUID mid) {
+		Announcement a = null;
+		List<Announcement> announcementList = missingMessages.get(mid);
+		if(announcementList != null) {
+			announcementList.sort(new SortAnnouncementByRound());
+			if(announcementList.size() > 0)
+				a = announcementList.get(0);
+		}
+		return a;
 	}
 
 	private Announcement removeFirstAnnouncement(UUID mid) {

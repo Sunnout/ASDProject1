@@ -21,9 +21,9 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.util.*;
 
-public class CyclonMembership extends GenericProtocol {
+public class Cyclon extends GenericProtocol {
 
-    private static final Logger logger = LogManager.getLogger(CyclonMembership.class);
+    private static final Logger logger = LogManager.getLogger(Cyclon.class);
 
     //Protocol information, to register in babel
     public final static short PROTOCOL_ID = 1000;
@@ -44,7 +44,7 @@ public class CyclonMembership extends GenericProtocol {
     private Host lastSentHost;
     private List<Connection> lastSentSample;
 
-    public CyclonMembership(Properties props, Host self) throws IOException, HandlerRegistrationException {
+    public Cyclon(Properties props, Host self) throws IOException, HandlerRegistrationException {
         super(PROTOCOL_NAME, PROTOCOL_ID);
 
         this.self = self;

@@ -1,5 +1,5 @@
 start_name = "./results/results-MacBook-Pro-de-Ema.local-{}.txt"
-n_processes = 100
+n_processes = 6
 starting_port = 5000
 
 
