@@ -9,7 +9,7 @@ import network.ISerializer;
 
 public class JoinRequest extends ProtoMessage {
 
-    public final static short MSG_ID = 111;
+    public final static short MSG_ID = 694;
 
 
     public JoinRequest() {

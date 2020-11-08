@@ -8,7 +8,7 @@ import network.data.Host;
 
 public class NeighborRequest extends ProtoMessage {
 
-    public final static short MSG_ID = 112;
+    public final static short MSG_ID = 695;
 
     private final Host node;
     private final boolean priority;

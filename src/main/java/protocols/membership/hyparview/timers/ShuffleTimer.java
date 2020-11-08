@@ -4,7 +4,7 @@ import babel.generic.ProtoTimer;
 
 public class ShuffleTimer extends ProtoTimer{
 
-    public static final short TIMER_ID = 151;
+    public static final short TIMER_ID = 6969;
 
     public ShuffleTimer() {
         super(TIMER_ID);

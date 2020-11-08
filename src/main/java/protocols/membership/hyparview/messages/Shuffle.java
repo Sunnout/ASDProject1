@@ -11,7 +11,7 @@ import network.data.Host;
 
 public class Shuffle extends ProtoMessage {
 
-    public final static short MSG_ID = 113;
+    public final static short MSG_ID = 692;
     private final Set<Host> node_activeView, node_passiveView;	
     private int ttl;
 	private final Host node;

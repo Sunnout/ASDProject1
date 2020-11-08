@@ -10,7 +10,7 @@ import network.data.Host;
 public class NeighborRequestReply extends ProtoMessage {
 
 	
-	public final static short MSG_ID = 113;
+	public final static short MSG_ID = 696;
 
     private final boolean accepted;
     

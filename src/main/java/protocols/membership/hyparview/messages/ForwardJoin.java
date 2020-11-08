@@ -8,7 +8,7 @@ import network.data.Host;
 
 public class ForwardJoin extends ProtoMessage {
 
-    public final static short MSG_ID = 111;
+    public final static short MSG_ID = 693;
 
     private final Host newNode;
     private final int ttl;
