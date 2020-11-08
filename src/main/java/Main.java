@@ -8,6 +8,7 @@ import babel.core.Babel;
 import network.data.Host;
 import protocols.apps.BroadcastApp;
 import protocols.broadcast.eagerpush.EagerPushBroadcast;
+import protocols.membership.cyclon.CyclonMembership;
 import protocols.membership.full.SimpleFullMembership;
 import protocols.membership.hyparview.HyParView;
 import utils.InterfaceToIp;
@@ -46,22 +47,23 @@ public class Main {
         logger.info("Hello, I am {}", myself);
 
         // Application
-        BroadcastApp broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
+//        BroadcastApp broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
         // Broadcast Protocol
 //        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
-        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
+//        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
         // Membership Protocol
         HyParView membership = new HyParView(props, myself);
 
+
         //Register applications in babel
-        babel.registerProtocol(broadcastApp);
-        babel.registerProtocol(broadcast);
+//        babel.registerProtocol(broadcastApp);
+//        babel.registerProtocol(broadcast);
         babel.registerProtocol(membership);
 
         //Init the protocols. This should be done after creating all protocols, since there can be inter-protocol
         //communications in this step.
-        broadcastApp.init(props);
-        broadcast.init(props);
+//        broadcastApp.init(props);
+//        broadcast.init(props);
         membership.init(props);
 
         //Start babel and protocol threads

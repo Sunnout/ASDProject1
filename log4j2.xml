@@ -13,14 +13,12 @@
     </Appenders>
 
     <Loggers>
-        <!-- UNCOMMENT TO SPECIFY LOG LEVEL OF PACKAGES -->
-        <Logger level="off" name="protocols.apps"/>
-        <Logger level="off" name="protocols.overlays"/>
-        <Logger level="off" name="protocols.broadcast"/>
-        <Logger level="debug" name="protocols.dissemination"/>
+
+        <!-- UNCOMMENT TO SPECIFY LOG LEVEL OF PACKAGES-->
+        <Logger level="info" name="protocols.apps"/>
+        <Logger level="info" name="protocols.broadcast"/>
         <Logger level="debug" name="protocols.membership"/>
-        
-        
+
 
         <Logger level="info" name="io.netty"/>
         <Logger level="info" name="network"/>

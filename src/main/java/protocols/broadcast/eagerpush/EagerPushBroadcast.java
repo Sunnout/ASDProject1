@@ -1,11 +1,7 @@
 package protocols.broadcast.eagerpush;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Properties;
-import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -105,7 +101,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 
 			if (neighbours.size() > 0) {
 				Set<Host> sample = getNeighboursSample(from);
-				// Simply send the message to every known neighbour (who will then do the same)
+				// Simply send the message to sample neighbours (who will then do the same)
 				sample.forEach(host -> {
 					logger.info("Sent {} to {}", msg, host);
 					sendMessage(msg, host);
