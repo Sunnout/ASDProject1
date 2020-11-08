@@ -10,6 +10,7 @@ import protocols.apps.BroadcastApp;
 import protocols.broadcast.eagerpush.EagerPushBroadcast;
 import protocols.membership.cyclon.CyclonMembership;
 import protocols.membership.full.SimpleFullMembership;
+import protocols.membership.hyparview.HyParView;
 import utils.InterfaceToIp;
 
 
@@ -51,7 +52,8 @@ public class Main {
 //        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
 //        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
         // Membership Protocol
-        CyclonMembership membership = new CyclonMembership(props, myself);
+        HyParView membership = new HyParView(props, myself);
+
 
         //Register applications in babel
 //        babel.registerProtocol(broadcastApp);
