@@ -297,18 +297,6 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	private void lazyPushGossip(PlumtreeGossipMessage msg) {
 		lazyIHaveMessage.addMessageId(msg.getMid());
-		//simpleAnnouncementPolicy();
-	}
-
-	private void simpleAnnouncementPolicy() {
-		lazyPushPeers.forEach(host -> {
-			if (!host.equals(myself)) {
-				sendMessage(lazyIHaveMessage, host);
-				logger.info("Sent IHave {} to {}", lazyIHaveMessage, host);
-			}
-		});
-
-		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
 	}
 
 	private void notSoSimpleAnnouncementPolicy() {
