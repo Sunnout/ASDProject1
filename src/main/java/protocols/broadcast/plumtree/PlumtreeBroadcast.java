@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 import babel.core.GenericProtocol;
 import babel.exceptions.HandlerRegistrationException;
 import babel.generic.ProtoMessage;
+import channel.tcp.events.ChannelMetrics;
 import network.data.Host;
 import protocols.broadcast.common.BroadcastRequest;
 import protocols.broadcast.common.DeliverNotification;
@@ -29,10 +30,10 @@ import protocols.broadcast.plumtree.timers.SendAnnouncementsTimer;
 import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
-import protocols.membership.full.timers.SampleTimer;
 
 public class PlumtreeBroadcast extends GenericProtocol {
 	private static final Logger logger = LogManager.getLogger(PlumtreeBroadcast.class);
+	
 
 	// Protocol information, to register in babel
 	public static final String PROTOCOL_NAME = "Plumtree";
@@ -40,7 +41,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	// Protocol parameters
 	public static final int ANNOUNCEMENT_TIMEOUT = 2000;
-	// TODO: define announce timeout value
+	// TODO: define announce timeout value and maybe put in props?
 	public static final int LONGER_MISSING_TIMEOUT = 500;
 	public static final int SHORTER_MISSING_TIMEOUT = 400;
 	public static final int THRESHOLD = 3;
@@ -342,5 +343,4 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		}
 		return a;
 	}
-
 }

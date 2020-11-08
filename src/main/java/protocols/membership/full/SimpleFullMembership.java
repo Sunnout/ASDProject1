@@ -232,6 +232,7 @@ public class SimpleFullMembership extends GenericProtocol {
         //It may or may not be useful to you, but at least you know it exists.
         sb.append(getMetrics());
         logger.info(sb);
+        
     }
 
     //If we passed a value >0 in the METRICS_INTERVAL_KEY property of the channel, this event will be triggered
