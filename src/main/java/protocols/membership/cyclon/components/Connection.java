@@ -11,7 +11,7 @@ import java.net.UnknownHostException;
 public class Connection {
 
     private final Host host;
-    private final int age;
+    private int age;
     public static ISerializer<Connection> serializer = new ISerializer<Connection>() {
         public void serialize(Connection con, ByteBuf out) throws IOException {
             Host.serializer.serialize(con.host, out);
@@ -38,5 +38,8 @@ public class Connection {
         return age;
     }
 
+    public void setAge(int age) {
+        this.age = age;
+    }
 
 }
