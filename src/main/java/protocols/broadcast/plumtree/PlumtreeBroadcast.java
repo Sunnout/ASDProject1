@@ -134,7 +134,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	private void uponPlumtreeGossipMessage(PlumtreeGossipMessage msg, Host from, short sourceProto, int channelId) {
 		logger.info("Received Gossip {} from {}", msg, from);
-		System.out.println("Round: " + msg.getRound());
+		//System.out.println("Round: " + msg.getRound());
 		UUID mid = msg.getMid();
 
 		if (!received.containsKey(mid)) {
