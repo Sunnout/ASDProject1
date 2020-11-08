@@ -1,16 +1,14 @@
 package protocols.membership.cyclon.messages;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import babel.generic.ProtoMessage;
 import io.netty.buffer.ByteBuf;
 import network.ISerializer;
 import network.data.Host;
 import protocols.membership.cyclon.components.Connection;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 public class SampleMessageReply extends ProtoMessage {
 

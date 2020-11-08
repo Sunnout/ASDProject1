@@ -53,8 +53,9 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private final HashMap<UUID, PlumtreeGossipMessage> received; // Hashmap of UUIDs to received messages
 	private final HashMap<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
 	private final Set<UUID> alreadyGrafted;
-	private boolean channelReady;
 	private boolean sentAnnouncements;
+	
+	private boolean channelReady;
 
 	public PlumtreeBroadcast(Properties properties, Host myself) throws IOException, HandlerRegistrationException {
 		super(PROTOCOL_NAME, PROTOCOL_ID);
@@ -66,8 +67,8 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		received = new HashMap<>();
 		missingMessageTimers = new HashMap<>();
 		alreadyGrafted = new HashSet<>();
-		channelReady = false;
 		sentAnnouncements = false;
+		channelReady = false;
 
 		/*--------------------- Register Request Handlers ----------------------------- */
 		registerRequestHandler(BroadcastRequest.REQUEST_ID, this::uponBroadcastRequest);

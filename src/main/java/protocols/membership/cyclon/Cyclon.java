@@ -23,353 +23,354 @@ import java.util.*;
 
 public class Cyclon extends GenericProtocol {
 
-    private static final Logger logger = LogManager.getLogger(Cyclon.class);
+	private static final Logger logger = LogManager.getLogger(Cyclon.class);
 
-    //Protocol information, to register in babel
-    public final static short PROTOCOL_ID = 1000;
-    public final static String PROTOCOL_NAME = "CyclonMembership";
+	// Protocol information, to register in babel
+	public final static short PROTOCOL_ID = 1000;
+	public final static String PROTOCOL_NAME = "CyclonMembership";
 
-    private final Host self;     //My own address/port
-    private final Set<Host> membership; //Peers I am connected to
-    private final Set<Host> pending; //Peers I am trying to connect to
+	private final Host self; // My own address/port
+	private final Set<Host> membership; // Peers I am connected to
+	private final Set<Host> pending; // Peers I am trying to connect to
+	private final Map<Host, Integer> membersAge;
+	private final Map<Host, List<Connection>> pendingSampleReplies;
 
-    private final Map<Host, Integer> membersAge;
-    private final Map<Host, List<Connection>> pendingSampleReplies;
+	private final int sampleTime; // Timeout for samples
+	private final int subsetSize; // Maximum size of sample
 
-    private final int sampleTime; //param: timeout for samples
-    private final int subsetSize; //param: maximum size of sample;
+	private final int channelId; // Id of the created channel
 
-    private final int channelId; //Id of the created channel
+	private Host lastSentHost;
+	private List<Connection> lastSentSample;
 
-    private Host lastSentHost;
-    private List<Connection> lastSentSample;
+	public Cyclon(Properties props, Host self) throws IOException, HandlerRegistrationException {
+		super(PROTOCOL_NAME, PROTOCOL_ID);
+		this.self = self;
+		this.membership = new HashSet<>();
+		this.pending = new HashSet<>();
+		this.membersAge = new HashMap<>();
+		this.lastSentHost = null;
+		this.lastSentSample = null;
+		this.pendingSampleReplies = new HashMap<>();
 
-    public Cyclon(Properties props, Host self) throws IOException, HandlerRegistrationException {
-        super(PROTOCOL_NAME, PROTOCOL_ID);
+		// Get some configurations from the properties file
+		this.subsetSize = Integer.parseInt(props.getProperty("sample_size", "6"));
+		this.sampleTime = Integer.parseInt(props.getProperty("sample_time", "2000")); // 2 seconds
 
-        this.self = self;
-        this.membership = new HashSet<>();
-        this.pending = new HashSet<>();
-        this.membersAge = new HashMap<>();
-        this.lastSentHost = null;
-        this.lastSentSample = null;
-        this.pendingSampleReplies = new HashMap<>();
+		String cMetricsInterval = props.getProperty("channel_metrics_interval", "20000"); // 20 seconds
 
-        //Get some configurations from the Properties object
-        this.subsetSize = Integer.parseInt(props.getProperty("sample_size", "6"));
-        this.sampleTime = Integer.parseInt(props.getProperty("sample_time", "2000")); //2 seconds
+		// Create a properties object to setup channel-specific properties
+		Properties channelProps = new Properties();
+		channelProps.setProperty(TCPChannel.ADDRESS_KEY, props.getProperty("address")); // The address to bind to
+		channelProps.setProperty(TCPChannel.PORT_KEY, props.getProperty("port")); // The port to bind to
+		channelProps.setProperty(TCPChannel.METRICS_INTERVAL_KEY, cMetricsInterval); // The interval to receive channel metrics
+		channelProps.setProperty(TCPChannel.HEARTBEAT_INTERVAL_KEY, "1000"); // Heartbeats interval for established connections
+		channelProps.setProperty(TCPChannel.HEARTBEAT_TOLERANCE_KEY, "3000"); // Time passed without heartbeats until closing a connection
+		channelProps.setProperty(TCPChannel.CONNECT_TIMEOUT_KEY, "1000"); // TCP connect timeout
+		channelId = createChannel(TCPChannel.NAME, channelProps); // Create the channel with the given properties
 
-        String cMetricsInterval = props.getProperty("channel_metrics_interval", "10000"); //10 seconds
+		/*---------------------- Register Message Serializers ---------------------- */
+		registerMessageSerializer(channelId, SampleMessage.MSG_ID, SampleMessage.serializer);
+		registerMessageSerializer(channelId, SampleMessageReply.MSG_ID, SampleMessageReply.serializer);
 
-        //Create a properties object to setup channel-specific properties. See the channel description for more details.
-        Properties channelProps = new Properties();
-        channelProps.setProperty(TCPChannel.ADDRESS_KEY, props.getProperty("address")); //The address to bind to
-        channelProps.setProperty(TCPChannel.PORT_KEY, props.getProperty("port")); //The port to bind to
-        channelProps.setProperty(TCPChannel.METRICS_INTERVAL_KEY, cMetricsInterval); //The interval to receive channel metrics
-        channelProps.setProperty(TCPChannel.HEARTBEAT_INTERVAL_KEY, "1000"); //Heartbeats interval for established connections
-        channelProps.setProperty(TCPChannel.HEARTBEAT_TOLERANCE_KEY, "3000"); //Time passed without heartbeats until closing a connection
-        channelProps.setProperty(TCPChannel.CONNECT_TIMEOUT_KEY, "1000"); //TCP connect timeout
-        channelId = createChannel(TCPChannel.NAME, channelProps); //Create the channel with the given properties
+		/*---------------------- Register Message Handlers -------------------------- */
+		registerMessageHandler(channelId, SampleMessage.MSG_ID, this::uponShuffle, this::uponMsgFail);
+		registerMessageHandler(channelId, SampleMessageReply.MSG_ID, this::uponShuffleReply, this::uponMsgFail);
 
-        /*---------------------- Register Message Serializers ---------------------- */
-        registerMessageSerializer(channelId, SampleMessage.MSG_ID, SampleMessage.serializer);
-        registerMessageSerializer(channelId, SampleMessageReply.MSG_ID, SampleMessageReply.serializer);
+		/*--------------------- Register Timer Handlers ----------------------------- */
+		registerTimerHandler(SampleTimer.TIMER_ID, this::uponShuffleTimer);
+		registerTimerHandler(InfoTimer.TIMER_ID, this::uponInfoTime);
 
-        /*---------------------- Register Message Handlers -------------------------- */
-        registerMessageHandler(channelId, SampleMessage.MSG_ID, this::uponShuffle, this::uponMsgFail);
-        registerMessageHandler(channelId, SampleMessageReply.MSG_ID, this::uponShuffleReply, this::uponMsgFail);
+		/*-------------------- Register Channel Events ------------------------------- */
+		registerChannelEventHandler(channelId, OutConnectionDown.EVENT_ID, this::uponOutConnectionDown);
+		registerChannelEventHandler(channelId, OutConnectionFailed.EVENT_ID, this::uponOutConnectionFailed);
+		registerChannelEventHandler(channelId, OutConnectionUp.EVENT_ID, this::uponOutConnectionUp);
+		registerChannelEventHandler(channelId, InConnectionUp.EVENT_ID, this::uponInConnectionUp);
+		registerChannelEventHandler(channelId, InConnectionDown.EVENT_ID, this::uponInConnectionDown);
+		registerChannelEventHandler(channelId, ChannelMetrics.EVENT_ID, this::uponChannelMetrics);
+	}
 
-        /*--------------------- Register Timer Handlers ----------------------------- */
-        registerTimerHandler(SampleTimer.TIMER_ID, this::uponShuffleTimer);
-        registerTimerHandler(InfoTimer.TIMER_ID, this::uponInfoTime);
+	@Override
+	public void init(Properties props) {
 
-        /*-------------------- Register Channel Events ------------------------------- */
-        registerChannelEventHandler(channelId, OutConnectionDown.EVENT_ID, this::uponOutConnectionDown);
-        registerChannelEventHandler(channelId, OutConnectionFailed.EVENT_ID, this::uponOutConnectionFailed);
-        registerChannelEventHandler(channelId, OutConnectionUp.EVENT_ID, this::uponOutConnectionUp);
-        registerChannelEventHandler(channelId, InConnectionUp.EVENT_ID, this::uponInConnectionUp);
-        registerChannelEventHandler(channelId, InConnectionDown.EVENT_ID, this::uponInConnectionDown);
-        registerChannelEventHandler(channelId, ChannelMetrics.EVENT_ID, this::uponChannelMetrics);
-    }
+		// Inform the dissemination protocol about the channel we created
+		triggerNotification(new ChannelCreated(channelId));
 
-    @Override
-    public void init(Properties props) {
+		// If there is a contact node, attempt to establish connection
+		if (props.containsKey("contact")) {
+			try {
+				String contact = props.getProperty("contact");
+				String[] hostElems = contact.split(":");
+				Host contactHost = new Host(InetAddress.getByName(hostElems[0]), Short.parseShort(hostElems[1]));
+				// We add to the pending set until the connection is successful
+				pending.add(contactHost);
+				openConnection(contactHost);
+			} catch (Exception e) {
+				logger.error("Invalid contact on configuration: '" + props.getProperty("contacts"));
+				e.printStackTrace();
+				System.exit(-1);
+			}
+		}
 
-        //Inform the dissemination protocol about the channel we created in the constructor
-        triggerNotification(new ChannelCreated(channelId));
+		// Setup the timer used to send samples
+		setupPeriodicTimer(new SampleTimer(), this.sampleTime, this.sampleTime);
 
-        //If there is a contact node, attempt to establish connection
-        if (props.containsKey("contact")) {
-            try {
-                String contact = props.getProperty("contact");
-                String[] hostElems = contact.split(":");
-                Host contactHost = new Host(InetAddress.getByName(hostElems[0]), Short.parseShort(hostElems[1]));
-                //We add to the pending set until the connection is successful
-                pending.add(contactHost);
-                openConnection(contactHost);
-            } catch (Exception e) {
-                logger.error("Invalid contact on configuration: '" + props.getProperty("contacts"));
-                e.printStackTrace();
-                System.exit(-1);
-            }
-        }
+		// Setup the timer to display protocol information
+		int pMetricsInterval = Integer.parseInt(props.getProperty("protocol_metrics_interval", "10000"));
+		if (pMetricsInterval > 0)
+			setupPeriodicTimer(new InfoTimer(), pMetricsInterval, pMetricsInterval);
+	}
 
-        //Setup the timer used to send samples (we registered its handler on the constructor)
-        setupPeriodicTimer(new SampleTimer(), this.sampleTime, this.sampleTime);
+	
+	/*--------------------------------- Messages ---------------------------------------- */
+	
+	// When the SampleTimer is triggered, gets the oldest peer in the membership and sends a sample
+	private void uponShuffleTimer(SampleTimer timer, long timerId) {
+		if (membership.size() > 0) {
+			increaseAge(membership);
+			Host target = getOldest(membership);
+			sendShuffle(target);
+			removeMembership(target);
+		}
+	}
 
-        //Setup the timer to display protocol information (also registered handler previously)
-        int pMetricsInterval = Integer.parseInt(props.getProperty("protocol_metrics_interval", "10000"));
-        if (pMetricsInterval > 0)
-            setupPeriodicTimer(new InfoTimer(), pMetricsInterval, pMetricsInterval);
-    }
+	// Sends a shuffle to the target
+	private void sendShuffle(Host target) {
+		Set<Host> subset = getRandomSubsetExcluding(membership, subsetSize, target);
+		List<Connection> sample = new ArrayList<>();
 
-    /*--------------------------------- Messages ---------------------------------------- */
-    //When the SampleTimer is triggered, gets the oldest peer in the membership and send a sample
-    private void uponShuffleTimer(SampleTimer timer, long timerId) {
-        if (membership.size() > 0) {
-            increaseAge(membership);
-            Host target = getOldest(membership);
-            sendShuffle(target);
-            removeMembership(target);
-        }
-    }
+		for (Host h : subset)
+			sample.add(new Connection(h, membersAge.get(h)));
 
-    //Sends a shuffle to the target
-    private void sendShuffle(Host target) {
-        Set<Host> subset = getRandomSubsetExcluding(membership, subsetSize, target);
-        List<Connection> sample = new ArrayList<>();
+		sample.add(new Connection(self, 0));
+		sendMessage(new SampleMessage(sample), target);
+		lastSentSample = sample;
+		lastSentHost = target;
+	}
 
-        for(Host h: subset)
-            sample.add(new Connection(h, membersAge.get(h)));
+	// Called when the process receives a shuffle request from another process
+	private void uponShuffle(SampleMessage msg, Host from, short sourceProto, int channelId) {
+		Set<Host> hostsSample = getRandomSubsetExcluding(membership, subsetSize, from);
+		List<Connection> sample = new ArrayList<>();
 
-        sample.add(new Connection(self, 0));
-        sendMessage(new SampleMessage(sample), target);
-        lastSentSample = sample;
-        lastSentHost = target;
-    }
+		for (Host h : hostsSample)
+			sample.add(new Connection(h, membersAge.get(h)));
 
-    //Called when the process receives a shuffle request from another process
-    private void uponShuffle(SampleMessage msg, Host from, short sourceProto, int channelId) {
-        Set<Host> hostsSample = getRandomSubsetExcluding(membership, subsetSize, from);
-        List<Connection> sample = new ArrayList<>();
+		sendShuffleReply(from, sample);
+		mergeViews(msg.getSample(), sample);
+	}
 
-        for(Host h: hostsSample)
-            sample.add(new Connection(h, membersAge.get(h)));
+	// Sends a shuffle reply to the process that sent a shuffle request
+	private void sendShuffleReply(Host target, List<Connection> sample) {
+		if (membership.contains(target))
+			sendMessage(new SampleMessageReply(sample), target);
+		else
+			pendingSampleReplies.put(target, sample);
+	}
 
-        sendShuffleReply(from, sample);
-        mergeViews(msg.getSample(), sample);
-    }
+	// The process received a shuffle reply from another process
+	private void uponShuffleReply(SampleMessageReply msg, Host from, short sourceProto, int channelId) {
+		if (from.equals(lastSentHost)) {
+			mergeViews(msg.getSample(), lastSentSample);
+			lastSentHost = null;
+			lastSentSample.clear();
+		} else
+			logger.debug("{} from {} is late, skipping sample reply", msg, from);
+	}
 
-    //Sends a shuffle reply to the process that sent a shuffle request
-    private void sendShuffleReply(Host target, List<Connection> sample){
-        if(membership.contains(target))
-            sendMessage(new SampleMessageReply(sample), target);
+	/*---------------------------- Membership Management ------------------------------ */
 
-        else
-            pendingSampleReplies.put(target, sample);
-    }
+	// Deals with management of memberships when a sample is received from another process
+	private void mergeViews(List<Connection> peerSample, List<Connection> mySample) {
+		for (Connection connection : peerSample) {
+			Host h = connection.getHost();
+			int hostSampleAge = connection.getAge();
 
-    //The process received a shuffle reply from another process
-    private void uponShuffleReply(SampleMessageReply msg, Host from, short sourceProto, int channelId) {
-        if(from.equals(lastSentHost)){
-            mergeViews(msg.getSample(), lastSentSample);
-            lastSentHost = null;
-            lastSentSample.clear();
+			if (membership.contains(h)) {
+				if (membersAge.get(h) > hostSampleAge)
+					membersAge.put(h, hostSampleAge);
+			} 
+			else if (membership.size() < subsetSize)
+				startMembership(connection);
+			else {
+				Host toRemove = pickHostInBoth(membership, mySample);
 
-        } else
-            logger.debug("{} from {} is late, skipping sample reply", msg, from);
-    }
+				if (toRemove == null)
+					toRemove = pickRandomHost(membership);
 
-    /*---------------------------- Membership Management ------------------------------ */
+				removeMembership(toRemove);
+				startMembership(connection);
+			}
+		}
+	}
 
-    //Deals with management of memberships when a sample is received from another process
-    private void mergeViews(List<Connection> peerSample, List<Connection> mySample){
-        for(Connection connection: peerSample){
-            Host h = connection.getHost();
-            int hostSampleAge = connection.getAge();
+	// Removes a process from the membership
+	private void removeMembership(Host host) {
+		closeConnection(host);
+		membership.remove(host);
+		membersAge.remove(host);
+		triggerNotification(new NeighbourDown(host));
+	}
 
-            if(membership.contains(h)){
-                if(membersAge.get(h) > hostSampleAge)
-                    membersAge.put(h, hostSampleAge);
+	// Adds a process to the membership
+	private void startMembership(Connection host) {
+		Host h = host.getHost();
+		openConnection(h);
+		pending.add(h);
+		membersAge.put(h, host.getAge());
+	}
 
-            } else if(membership.size() < subsetSize)
-                startMembership(connection);
+	
+	/*------------------------------ Auxiliary Methods -------------------------------- */
 
-            else {
-                Host toRemove = pickHostInBoth(membership, mySample);
+	// Gets the oldest known host
+	// Always returns non null because ageMembership() is called before the first time this method is called
+	private Host getOldest(Set<Host> hostSet) {
+		Host toReturn = null;
+		int currentAge = 0;
+		int age;
 
-                if(toRemove == null)
-                    toRemove = pickRandomHost(membership);
+		for (Host h : hostSet) {
+			age = membersAge.get(h);
+			if (age > currentAge) {
+				toReturn = h;
+				currentAge = age;
+			}
+		}
 
-                removeMembership(toRemove);
-                startMembership(connection);
-            }
-        }
-    }
+		return toReturn;
+	}
 
-    //Removes a process from the membership
-    private void removeMembership(Host host){
-        closeConnection(host);
-        membership.remove(host);
-        membersAge.remove(host);
-        triggerNotification(new NeighbourDown(host));
-    }
+	// Increments the age of the whole known membership
+	private void increaseAge(Set<Host> hostSet) {
+		for (Host h : hostSet)
+			membersAge.put(h, membersAge.get(h) + 1);
+	}
 
-    //Adds a process to the membership
-    private void startMembership(Connection host){
-        Host h = host.getHost();
-        openConnection(h);
-        pending.add(h);
-        membersAge.put(h, host.getAge());
-    }
+	// Gets a random subset from the set of peers
+	private static Set<Host> getRandomSubsetExcluding(Set<Host> hostSet, int sampleSize, Host exclude) {
+		List<Host> list = new LinkedList<>(hostSet);
+		list.remove(exclude);
+		Collections.shuffle(list);
+		return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
+	}
 
-    /*------------------------------ Auxiliary Methods -------------------------------- */
+	// Picks a random peer that is contained in both sets
+	private Host pickHostInBoth(Set<Host> set1, List<Connection> set2) {
+		for (Connection connection : set2) {
+			Host h = connection.getHost();
+			if (set1.contains(h))
+				return h;
+		}
 
-    //Gets the oldest known host
-    //Always returns non null because ageMembership() is called before the first time this method is called
-    private Host getOldest(Set<Host> hostSet) {
-        Host toReturn = null;
-        int currentAge = 0;
-        int age;
+		return null;
+	}
 
-        for (Host h: hostSet) {
-            age = membersAge.get(h);
-            if (age > currentAge) {
-                toReturn = h;
-                currentAge = age;
-            }
-        }
+	// Picks a random host from a set received as parameter
+	private Host pickRandomHost(Set<Host> setToSearch) {
+		List<Host> list = new LinkedList<>(setToSearch);
+		Collections.shuffle(list);
+		return list.get(0);
+	}
 
-        return toReturn;
-    }
+	/* ---------------------------- TCPChannel Events ---------------------------- */
 
-    //Increments the age of the whole known membership
-    private void increaseAge(Set<Host> hostSet){
-        for (Host h: hostSet)
-            membersAge.put(h, membersAge.get(h)+1);
-    }
+	// If a connection is successfully established, this event is triggered. In this protocol, we want to add the
+	// respective peer to the membership, and inform the Dissemination protocol via a notification.
+	private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
+		Host peer = event.getNode();
+		pending.remove(peer);
+		if (membership.add(peer)) {
+			triggerNotification(new NeighbourUp(peer));
+			logger.debug("Membership: {}", membership);
 
-    //Gets a random subset from the set of peers
-    private static Set<Host> getRandomSubsetExcluding(Set<Host> hostSet, int sampleSize, Host exclude) {
-        List<Host> list = new LinkedList<>(hostSet);
-        list.remove(exclude);
-        Collections.shuffle(list);
-        return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
-    }
+			if (!membersAge.containsKey(peer))
+				membersAge.put(peer, 0);
 
-    //Picks a random peer that is contained in both sets
-    private Host pickHostInBoth(Set<Host> set1, List<Connection> set2){
-        for(Connection connection: set2){
-            Host h = connection.getHost();
-            if(set1.contains(h))
-                return h;
-        }
+			if (pendingSampleReplies.containsKey(peer)) {
+				List<Connection> sample = pendingSampleReplies.remove(peer);
+				sendShuffleReply(peer, sample);
+			}
+		}
+	}
 
-        return null;
-    }
+	// Opens connections to a set of hosts and adds them to the pending set
+	private void uponMsgFail(ProtoMessage msg, Host host, short destProto, Throwable throwable, int channelId) {
+		logger.error("Message {} to {} failed, reason: {}", msg, host, throwable);
+	}
 
-    //Picks a random host from a set received as parameter
-    private Host pickRandomHost(Set<Host> setToSearch){
-        List<Host> list = new LinkedList<>(setToSearch);
-        Collections.shuffle(list);
-        return list.get(0);
-    }
+	// If an established connection is disconnected, remove the peer from the membership and inform the Dissemination
+	// protocol. Alternatively, we could do smarter things like retrying the connection X times.
+	private void uponOutConnectionDown(OutConnectionDown event, int channelId) {
+		Host peer = event.getNode();
+		logger.debug("Connection to {} is down cause {}", peer, event.getCause());
+		membership.remove(peer);
+		membersAge.remove(peer);
+		triggerNotification(new NeighbourDown(peer));
+	}
 
-    /* --------------------------------- TCPChannel Events ---------------------------- */
+	// If a connection fails to be established, this event is triggered. In this protocol, we simply remove from the
+	// pending set. Note that this event is only triggered while attempting a connection, not after connection.
+	// Thus the peer will be in the pending set, and not in the membership (unless something is very wrong with our code)
+	private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> event, int channelId) {
+		logger.debug("Connection to {} failed cause: {}", event.getNode(), event.getCause());
+		pending.remove(event.getNode());
+		membersAge.remove(event.getNode());
+	}
 
-    //If a connection is successfully established, this event is triggered. In this protocol, we want to add the
-    //respective peer to the membership, and inform the Dissemination protocol via a notification.
-    private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
-        Host peer = event.getNode();
-        pending.remove(peer);
-        if (membership.add(peer)) {
-            triggerNotification(new NeighbourUp(peer));
-            logger.debug("Membership: {}", membership);
+	// If someone established a connection to me, this event is triggered. In this protocol we do nothing with this 
+	// event. If we want to add the peer to the membership, we will establish our own outgoing connection.
+	// (not the smartest protocol, but its simple)
+	private void uponInConnectionUp(InConnectionUp event, int channelId) {
+		logger.trace("Connection from {} is up", event.getNode());
+	}
 
-            if(!membersAge.containsKey(peer))
-                membersAge.put(peer, 0);
+	// A connection someone established to me is disconnected.
+	private void uponInConnectionDown(InConnectionDown event, int channelId) {
+		logger.trace("Connection from {} is down, cause: {}", event.getNode(), event.getCause());
+	}
 
-            if(pendingSampleReplies.containsKey(peer)){
-                List<Connection> sample = pendingSampleReplies.remove(peer);
-                sendShuffleReply(peer, sample);
-            }
-        }
-    }
+	/* --------------------------------- Metrics ---------------------------- */
 
-    //Opens connections to a set of hosts and adds them to the pending set
-    private void uponMsgFail(ProtoMessage msg, Host host, short destProto,
-                             Throwable throwable, int channelId) {
-        //If a message fails to be sent, for whatever reason, log the message and the reason
-        logger.error("Message {} to {} failed, reason: {}", msg, host, throwable);
-    }
+	// If we setup the InfoTimer in the constructor, this event will be triggered periodically.
+	// We are simply printing some information to present during runtime.
+	private void uponInfoTime(InfoTimer timer, long timerId) {
+		StringBuilder sb = new StringBuilder("Membership Metrics:\n");
+		sb.append("Membership: ").append(membership).append("\n");
+		sb.append("PendingMembership: ").append(pending).append("\n");
+		// getMetrics returns an object with the number of events of each type processed
+		// by this protocol.
+		// It may or may not be useful to you, but at least you know it exists.
+		sb.append(getMetrics());
+		logger.info(sb);
+	}
 
-    //If an established connection is disconnected, remove the peer from the membership and inform the Dissemination
-    //protocol. Alternatively, we could do smarter things like retrying the connection X times.
-    private void uponOutConnectionDown(OutConnectionDown event, int channelId) {
-        Host peer = event.getNode();
-        logger.debug("Connection to {} is down cause {}", peer, event.getCause());
-        membership.remove(peer);
-        membersAge.remove(peer);
-        triggerNotification(new NeighbourDown(peer));
-    }
-
-    //If a connection fails to be established, this event is triggered. In this protocol, we simply remove from the
-    //pending set. Note that this event is only triggered while attempting a connection, not after connection.
-    //Thus the peer will be in the pending set, and not in the membership (unless something is very wrong with our code)
-    private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> event, int channelId) {
-        logger.debug("Connection to {} failed cause: {}", event.getNode(), event.getCause());
-        pending.remove(event.getNode());
-        membersAge.remove(event.getNode());
-    }
-
-    //If someone established a connection to me, this event is triggered. In this protocol we do nothing with this event.
-    //If we want to add the peer to the membership, we will establish our own outgoing connection.
-    // (not the smartest protocol, but its simple)
-    private void uponInConnectionUp(InConnectionUp event, int channelId) {
-        logger.trace("Connection from {} is up", event.getNode());
-    }
-
-    //A connection someone established to me is disconnected.
-    private void uponInConnectionDown(InConnectionDown event, int channelId) {
-        logger.trace("Connection from {} is down, cause: {}", event.getNode(), event.getCause());
-    }
-
-    /* --------------------------------- Metrics ---------------------------- */
-
-    //If we setup the InfoTimer in the constructor, this event will be triggered periodically.
-    //We are simply printing some information to present during runtime.
-    private void uponInfoTime(InfoTimer timer, long timerId) {
-        StringBuilder sb = new StringBuilder("Membership Metrics:\n");
-        sb.append("Membership: ").append(membership).append("\n");
-        sb.append("PendingMembership: ").append(pending).append("\n");
-        //getMetrics returns an object with the number of events of each type processed by this protocol.
-        //It may or may not be useful to you, but at least you know it exists.
-        sb.append(getMetrics());
-        logger.info(sb);
-    }
-
-    //If we passed a value >0 in the METRICS_INTERVAL_KEY property of the channel, this event will be triggered
-    //periodically by the channel. This is NOT a protocol timer, but a channel event.
-    //Again, we are just showing some of the information you can get from the channel, and use how you see fit.
-    //"getInConnections" and "getOutConnections" returns the currently established connection to/from me.
-    //"getOldInConnections" and "getOldOutConnections" returns connections that have already been closed.
-    private void uponChannelMetrics(ChannelMetrics event, int channelId) {
-        StringBuilder sb = new StringBuilder("Channel Metrics:\n");
-        sb.append("In channels:\n");
-        event.getInConnections().forEach(c -> sb.append(String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s)\n",
-                c.getPeer(), c.getSentAppMessages(), c.getSentAppBytes(), c.getReceivedAppMessages(),
-                c.getReceivedAppBytes())));
-        event.getOldInConnections().forEach(c -> sb.append(String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s) (old)\n",
-                c.getPeer(), c.getSentAppMessages(), c.getSentAppBytes(), c.getReceivedAppMessages(),
-                c.getReceivedAppBytes())));
-        sb.append("Out channels:\n");
-        event.getOutConnections().forEach(c -> sb.append(String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s)\n",
-                c.getPeer(), c.getSentAppMessages(), c.getSentAppBytes(), c.getReceivedAppMessages(),
-                c.getReceivedAppBytes())));
-        event.getOldOutConnections().forEach(c -> sb.append(String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s) (old)\n",
-                c.getPeer(), c.getSentAppMessages(), c.getSentAppBytes(), c.getReceivedAppMessages(),
-                c.getReceivedAppBytes())));
-        sb.setLength(sb.length() - 1);
-        logger.info(sb);
-    }
+	// If we passed a value >0 in the METRICS_INTERVAL_KEY property of the channel, this event will be triggered
+	// periodically by the channel. This is NOT a protocol timer, but a channel event.
+	// Again, we are just showing some of the information you can get from the channel, and use how you see fit.
+	// "getInConnections" and "getOutConnections" returns the currently established connection to/from me.
+	// "getOldInConnections" and "getOldOutConnections" returns connections that have already been closed.
+	private void uponChannelMetrics(ChannelMetrics event, int channelId) {
+		StringBuilder sb = new StringBuilder("Channel Metrics:\n");
+		sb.append("In channels:\n");
+		event.getInConnections()
+				.forEach(c -> sb.append(
+						String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s)\n", c.getPeer(), c.getSentAppMessages(),
+								c.getSentAppBytes(), c.getReceivedAppMessages(), c.getReceivedAppBytes())));
+		event.getOldInConnections()
+				.forEach(c -> sb.append(
+						String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s) (old)\n", c.getPeer(), c.getSentAppMessages(),
+								c.getSentAppBytes(), c.getReceivedAppMessages(), c.getReceivedAppBytes())));
+		sb.append("Out channels:\n");
+		event.getOutConnections()
+				.forEach(c -> sb.append(
+						String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s)\n", c.getPeer(), c.getSentAppMessages(),
+								c.getSentAppBytes(), c.getReceivedAppMessages(), c.getReceivedAppBytes())));
+		event.getOldOutConnections()
+				.forEach(c -> sb.append(
+						String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s) (old)\n", c.getPeer(), c.getSentAppMessages(),
+								c.getSentAppBytes(), c.getReceivedAppMessages(), c.getReceivedAppBytes())));
+		sb.setLength(sb.length() - 1);
+		logger.info(sb);
+	}
 }
