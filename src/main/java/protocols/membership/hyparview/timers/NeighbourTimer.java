@@ -2,11 +2,11 @@ package protocols.membership.hyparview.timers;
 
 import babel.generic.ProtoTimer;
 
-public class ShuffleTimer extends ProtoTimer{
+public class NeighbourTimer extends ProtoTimer{
 
-    public static final short TIMER_ID = 6912;
+    public static final short TIMER_ID = 6913;
 
-    public ShuffleTimer() {
+    public NeighbourTimer() {
         super(TIMER_ID);
     }
 
@@ -14,4 +14,5 @@ public class ShuffleTimer extends ProtoTimer{
     public ProtoTimer clone() {
         return this;
     }
+
 }

@@ -43,6 +43,10 @@ public class Shuffle extends ProtoMessage {
 		return ttl;
 	}
 	
+	public void setTTL(int ttl) {
+		this.ttl = ttl;
+	}
+	
 	 public static ISerializer<Shuffle> serializer = new ISerializer<Shuffle>() {
 	        @Override
 	        public void serialize(Shuffle shuffleMessage, ByteBuf out) throws IOException {

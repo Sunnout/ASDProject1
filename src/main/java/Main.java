@@ -7,6 +7,7 @@ import org.apache.logging.log4j.Logger;
 import babel.core.Babel;
 import network.data.Host;
 import protocols.apps.BroadcastApp;
+import protocols.broadcast.eagerpush.EagerPushBroadcast;
 import protocols.broadcast.plumtree.PlumtreeBroadcast;
 import protocols.membership.hyparview.HyParView;
 import utils.InterfaceToIp;
