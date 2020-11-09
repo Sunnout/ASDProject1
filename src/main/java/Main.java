@@ -70,6 +70,8 @@ public class Main {
         //Start babel and protocol threads
         babel.start();
 
+        // Prints number of different messages of Plumtree
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> broadcast.printMetrics()));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
 
     }
