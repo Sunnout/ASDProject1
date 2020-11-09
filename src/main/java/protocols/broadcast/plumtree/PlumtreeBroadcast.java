@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -32,7 +33,7 @@ import protocols.membership.common.notifications.NeighbourUp;
 
 public class PlumtreeBroadcast extends GenericProtocol {
 	private static final Logger logger = LogManager.getLogger(PlumtreeBroadcast.class);
-	
+
 
 	// Protocol information, to register in babel
 	public static final String PROTOCOL_NAME = "Plumtree";
@@ -46,6 +47,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	public static final int THRESHOLD = 3;
 
 	private final Host myself; // My own address/port
+	private final Set<Host> knownNeighbours; // Known neighbours
 	private final Set<Host> eagerPushPeers; // Neighbours with which to use eager push gossip
 	private final Set<Host> lazyPushPeers; // Neighbours with which to use lazy push gossip
 	private PlumtreeIHaveMessage lazyIHaveMessage; // IHAVE msg with announcements to be sent
@@ -54,12 +56,13 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private final HashMap<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
 	private final Set<UUID> alreadyGrafted;
 	private boolean sentAnnouncements;
-	
+
 	private boolean channelReady;
 
 	public PlumtreeBroadcast(Properties properties, Host myself) throws IOException, HandlerRegistrationException {
 		super(PROTOCOL_NAME, PROTOCOL_ID);
 		this.myself = myself;
+		knownNeighbours = new HashSet<>();
 		eagerPushPeers = new HashSet<>();
 		lazyPushPeers = new HashSet<>();
 		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
@@ -150,11 +153,12 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			msg.incrementRound();
 			eagerPushGossip(msg);
 			lazyPushGossip(msg);
-			eagerPushPeers.add(from);
-			lazyPushPeers.remove(from);
-			//optimization(msg, from);
-
-		} else if (!from.equals(myself) && eagerPushPeers.size() > 1) {
+			if(knownNeighbours.contains(from)) { // TODO: HERE?
+				eagerPushPeers.add(from);
+				lazyPushPeers.remove(from);
+				optimization(msg, from);
+			}
+		} else if (knownNeighbours.contains(from) && !from.equals(myself) && eagerPushPeers.size() > 1) { // TODO: HERE?
 			eagerPushPeers.remove(from);
 			// Send announcements before adding new lazy push neighbour 
 			notSoSimpleAnnouncementPolicy();
@@ -163,7 +167,6 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			PlumtreePruneMessage pruneMsg = new PlumtreePruneMessage(UUID.randomUUID(), myself);
 			sendMessage(pruneMsg, from);
 			logger.info("Sent Prune {} to {}", pruneMsg, from);
-
 		}
 	}
 
@@ -184,22 +187,24 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	private void uponPlumtreePruneMessage(PlumtreePruneMessage msg, Host from, short sourceProto, int channelId) {
 		logger.info("Received Prune {} from {}", msg, from);
-
-		eagerPushPeers.remove(from);
-		// Send announcements before adding new lazy push neighbour 
-		notSoSimpleAnnouncementPolicy();
-		lazyPushPeers.add(from);
+		if(knownNeighbours.contains(from)) { // TODO: HERE?
+			eagerPushPeers.remove(from);
+			// Send announcements before adding new lazy push neighbour 
+			notSoSimpleAnnouncementPolicy();
+			lazyPushPeers.add(from);
+		}
 	}
 
 	private void uponPlumtreeGraftMessage(PlumtreeGraftMessage msg, Host from, short sourceProto, int channelId) {
 		UUID mid = msg.getMessageId();
 		logger.info("Received Graft {} from {}", mid, from);
-
-		eagerPushPeers.add(from);
-		lazyPushPeers.remove(from);
-		if (received.containsKey(mid)) {
-			sendMessage(received.get(mid), from);
-			logger.info("Sent Gossip {} to {}", mid, from);
+		if(knownNeighbours.contains(from)) { // TODO: HERE?
+			eagerPushPeers.add(from);
+			lazyPushPeers.remove(from);
+			if (received.containsKey(mid)) {
+				sendMessage(received.get(mid), from);
+				logger.info("Sent Gossip {} to {}", mid, from);
+			}
 		}
 	}
 
@@ -212,6 +217,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	private void uponNeighbourUp(NeighbourUp notification, short sourceProto) {
 		for (Host h : notification.getNeighbours()) {
+			knownNeighbours.add(h);
 			eagerPushPeers.add(h);
 			logger.info("New neighbour: " + h);
 		}
@@ -219,6 +225,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 	private void uponNeighbourDown(NeighbourDown notification, short sourceProto) {
 		for (Host h : notification.getNeighbours()) {
+			knownNeighbours.remove(h);
 			eagerPushPeers.remove(h);
 			lazyPushPeers.remove(h);
 
@@ -250,27 +257,33 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 			if(announcement != null) {
 				Host sender = announcement.getSender();
-				eagerPushPeers.add(sender);
-				lazyPushPeers.remove(sender);
+				if(knownNeighbours.contains(sender)) { // TODO: HERE?
+					eagerPushPeers.add(sender);
+					lazyPushPeers.remove(sender);
 
-				PlumtreeGraftMessage graftMsg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, announcement.getRound(), mid);
-				sendMessage(graftMsg, sender);
-				logger.info("Sent Graft {} to {}", mid, sender);
-				alreadyGrafted.add(mid);
+					PlumtreeGraftMessage graftMsg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, announcement.getRound(), mid);
+					sendMessage(graftMsg, sender);
+					logger.info("Sent Graft {} to {}", mid, sender);
+					// TODO: alreadyGrafted.add(mid); não por a original no alreadyGrafted
 
-				// Send graft for all the announcements of sender
-				missingMessages.forEach((msgId, list) -> {
-					if(!alreadyGrafted.contains(msgId)) {
-						list.forEach(a -> {
-							if(a.getSender().equals(sender)) {
-								PlumtreeGraftMessage otherGraftMsg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, a.getRound(), msgId);
-								sendMessage(otherGraftMsg, sender);
-								logger.info("Sent Graft {} to {}", msgId, sender);
-								alreadyGrafted.add(msgId);
+					// Send graft for all the announcements of sender
+					missingMessages.forEach((msgId, list) -> {
+						if(!alreadyGrafted.contains(msgId)) {
+							Iterator<Announcement> i = list.iterator();
+							while (i.hasNext()) {
+								Announcement a = i.next();
+								if(a.getSender().equals(sender)) {
+									PlumtreeGraftMessage otherGraftMsg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, a.getRound(), msgId);
+									sendMessage(otherGraftMsg, sender);
+									logger.info("Sent Graft {} to {}", msgId, sender);
+									alreadyGrafted.add(msgId);
+								}
+								// TODO: remover todos os announcements que envio?
+								i.remove();
 							}
-						});
-					}
-				});
+						}
+					});
+				}
 			}
 		}
 	}
@@ -315,13 +328,13 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	}
 
 	private void optimization(PlumtreeGossipMessage msg, Host from) {
-		Announcement announcement = getFirstAnnouncement(msg.getMid());
+		Announcement announcement = getFirstAnnouncement(msg.getMid()); // TODO: get ou remove?
 
 		if(announcement != null) {
 			int r = announcement.getRound();
 			int round = msg.getRound()-1;
 			Host sender = announcement.getSender();
-			if(r < round && (round - r) >= THRESHOLD) {
+			if(r < round && (round - r) >= THRESHOLD && knownNeighbours.contains(sender)) { // TODO: HERE?
 				PlumtreeGraftMessage graftMsg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, null);
 				sendMessage(graftMsg, sender);
 				logger.info("Sent Graft {} to {}", null, sender);
@@ -332,7 +345,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			}
 		}
 	}
-	
+
 	private Announcement getFirstAnnouncement(UUID mid) {
 		Announcement a = null;
 		List<Announcement> announcementList = missingMessages.get(mid);
