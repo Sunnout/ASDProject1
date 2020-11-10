@@ -342,7 +342,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private void eagerPushGossip(PlumtreeGossipMessage msg) {
 
 		eagerPushPeers.forEach(host -> {
-			if (!host.equals(myself)) {
+			if (!host.equals(myself) && neighbours.contains(host)) {
 				sendMessage(msg, host);
 				logger.info("Sent Gossip {} to {}", msg, host);
 				nSentGossipMsgs++;
@@ -357,7 +357,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private void notSoSimpleAnnouncementPolicy() {
 		if(!lazyIHaveMessage.getMessageIds().isEmpty()) {
 			lazyPushPeers.forEach(host -> {
-				if (!host.equals(myself)) {
+				if (!host.equals(myself) && neighbours.contains(host)) {
 					sendMessage(lazyIHaveMessage, host);
 					logger.info("Sent IHave {} to {}", lazyIHaveMessage, host);
 					nSentIHaveMsgs++;
