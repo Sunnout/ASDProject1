@@ -12,26 +12,23 @@ import network.data.Host;
 public class ShuffleRequestReply extends ProtoMessage {
 
 	public final static short MSG_ID = 691;
-    private final Set<Host> node_activeView, node_passiveView, nodesReceived;	
+    private final Set<Host> nodes, nodesReceived;	
 	private final Host node;
 	
-	public ShuffleRequestReply(Host node, Set<Host> node_activeView, Set<Host> node_passiveView, Set<Host> nodesReceived) {
+	public ShuffleRequestReply(Host node, Set<Host> nodes, Set<Host> nodesReceived) {
 		super(MSG_ID);
 		this.node = node;
-		this.node_activeView = node_activeView;
-		this.node_passiveView = node_passiveView;
+		this.nodes = nodes;
 		this.nodesReceived = nodesReceived;
 	}
 	
 	
 	
-	public Set<Host> getNode_activeView() {
-		return node_activeView;
+	public Set<Host> getNodes() {
+		return nodes;
 	}
 
-	public Set<Host> getNode_passiveView() {
-		return node_passiveView;
-	}
+	
 
 	public Set<Host> getNodesReceived() {
 		return nodesReceived;
@@ -47,8 +44,7 @@ public class ShuffleRequestReply extends ProtoMessage {
 	 public static ISerializer<ShuffleRequestReply> serializer = new ISerializer<ShuffleRequestReply>() {
 	        @Override
 	        public void serialize(ShuffleRequestReply shuffleMessage, ByteBuf out) throws IOException {
-	        	Set<Host> active = shuffleMessage.getNode_activeView();
-	        	Set<Host> passive = shuffleMessage.getNode_passiveView();
+	        	Set<Host> active = shuffleMessage.getNodes();
 	        	Set<Host> nodesReceived = shuffleMessage.getNodesReceived();
 	        	Host node = shuffleMessage.getNode();
 	        	
@@ -56,9 +52,6 @@ public class ShuffleRequestReply extends ProtoMessage {
 	            for (Host h : active)
 	                Host.serializer.serialize(h, out);
 	            
-	            out.writeInt(passive.size());
-	            for (Host h : passive)
-	                Host.serializer.serialize(h, out);
 	            
 	            out.writeInt(nodesReceived.size());
 	            for (Host h : nodesReceived)
@@ -76,11 +69,6 @@ public class ShuffleRequestReply extends ProtoMessage {
 	            for (int i = 0; i < size; i++)
 	                active_subset.add(Host.serializer.deserialize(in));
 	            
-	            size = in.readInt();
-	            Set<Host> passive_subset = new HashSet<>(size, 1);
-	            for (int i = 0; i < size; i++)
-	                passive_subset.add(Host.serializer.deserialize(in));
-	            
 	            
 	            size = in.readInt();
 	            Set<Host> nodesReceived = new HashSet<>(size, 1);
@@ -91,7 +79,7 @@ public class ShuffleRequestReply extends ProtoMessage {
 	            
 	            
 	            
-	            return new ShuffleRequestReply(node,active_subset,passive_subset,nodesReceived);
+	            return new ShuffleRequestReply(node,active_subset,nodesReceived);
 	        }
 	    };
 	

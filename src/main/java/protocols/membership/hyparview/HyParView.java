@@ -262,15 +262,15 @@ public class HyParView extends GenericProtocol {
 			sendMessage(shuffle, node);
 		} else {
 			openConnection(from);
-			Set<Host> kActiveView = getRandomSubsetExcluding(activeView, shuffle.getNode_activeView().size(), null);
-			Set<Host> kPassiveView = getRandomSubsetExcluding(passiveView, shuffle.getNode_passiveView().size(), null);
-			ShuffleRequestReply srp = new ShuffleRequestReply(self, kActiveView, kPassiveView,
-					shuffle.getNode_passiveView());
+			Set<Host> kActiveView = getRandomSubsetExcluding(activeView, ka, null);
+			Set<Host> kPassiveView = getRandomSubsetExcluding(passiveView, kb, null);
+			kActiveView.addAll(kPassiveView);
+			ShuffleRequestReply srp = new ShuffleRequestReply(self, kActiveView,
+					shuffle.getNodes());
 			logger.debug("sent Shuffle reply to " + from.toString());
 			sendMessage(srp, from);
 
-			for (Host node : shuffle.getNode_passiveView()) {
-				// TODO add variable with passive view max size
+			for (Host node : shuffle.getNodes()) {
 				if (passiveView.size() > passiveViewSize) {
 					if (!(node.equals(self) || passiveView.contains(node) || activeView.contains(node))) {
 
@@ -292,29 +292,6 @@ public class HyParView extends GenericProtocol {
 					addToPassiveView(node);
 				}
 
-			}
-
-			for (Host node : shuffle.getNode_activeView()) {
-				if (passiveView.size() > passiveViewSize) {
-					if (!(node.equals(self) || passiveView.contains(node) || activeView.contains(node))) {
-
-						boolean done = false;
-						for (Host pNode : kPassiveView) {
-							if (passiveView.contains(pNode)) {
-								passiveView.remove(pNode);
-								addToPassiveView(node);
-								done = true;
-							}
-						}
-
-						if (!done) {
-							addToPassiveView(node);
-							done = true;
-						}
-					}
-				} else {
-					addToPassiveView(node);
-				}
 			}
 		}
 	}
@@ -323,31 +300,7 @@ public class HyParView extends GenericProtocol {
 		logger.debug("Receveid ShuffleReply Operation from " + from.toString());
 		Set<Host> nodesReceived = shuffleReply.getNodesReceived();
 
-		for (Host node : shuffleReply.getNode_passiveView()) {
-			// TODO add variable with passive view max size
-			if (passiveView.size() > passiveViewSize) {
-				if (!(node.equals(self) || passiveView.contains(node) || activeView.contains(node))) {
-
-					boolean done = false;
-					for (Host pNode : nodesReceived) {
-						if (passiveView.contains(pNode)) {
-							passiveView.remove(pNode);
-							addToPassiveView(node);
-							done = true;
-						}
-					}
-
-					if (!done) {
-						addToPassiveView(node);
-						done = true;
-					}
-				}
-			} else {
-				addToPassiveView(node);
-			}
-		}
-
-		for (Host node : shuffleReply.getNode_activeView()) {
+		for (Host node : shuffleReply.getNodes()) {
 			if (passiveView.size() > passiveViewSize) {
 				if (!(node.equals(self) || passiveView.contains(node) || activeView.contains(node))) {
 
@@ -385,7 +338,8 @@ public class HyParView extends GenericProtocol {
 			Set<Host> kActiveView = getRandomSubsetExcluding(activeView, ka, node);
 			Set<Host> kPassiveView = getRandomSubsetExcluding(passiveView, kb, node);
 			logger.debug("TIMER : Sent shuffle message  to " + node.toString());
-			sendMessage(new Shuffle(self, kActiveView, kPassiveView, ARWL), node);
+			kActiveView.addAll(kPassiveView);
+			sendMessage(new Shuffle(self, kActiveView, ARWL), node);
 		}
 	}
 	
