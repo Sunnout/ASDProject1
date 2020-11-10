@@ -244,6 +244,7 @@ public class HyParView extends GenericProtocol {
 			passiveView.remove(from);
 			addToActiveView(from);
 		} else {
+			logger.info("Closing connection " + from.toString());
 			closeConnection(from);
 			Host p = getRandom(passiveView);
 			openConnection(p);
@@ -465,6 +466,7 @@ public class HyParView extends GenericProtocol {
 			if (activeView.size() >= (fanout + 1)) {
 				Host random = getRandom(activeView);
 				activeView.remove(random);
+				logger.info("removing from active view, disconnecting" + random.toString());
 				closeConnection(random);
 				logger.info("Removed from active view node " + random.toString());
 				triggerNotification(new NeighbourDown(random));
@@ -477,7 +479,7 @@ public class HyParView extends GenericProtocol {
 		}
 		
 
-		if (passiveView.contains(peer) && !pendingNeighbour.contains(peer)) {
+		if (passiveView.contains(peer) && !pendingNeighbour.contains(peer) && !activeView.contains(peer)) {
 			if(testNeighbours.contains(peer)) {
 				boolean prio = activeView.size() == 0;
 				logger.info("Sent neighborRequest with prio: " + prio + " to " + peer);
@@ -485,6 +487,7 @@ public class HyParView extends GenericProtocol {
 				testNeighbours.add(peer);
 			}
 			else {
+				logger.info("Closing connection if pending neighbor or passiveView " + peer.toString());
 				closeConnection(peer);
 			}
 			
@@ -552,8 +555,14 @@ public class HyParView extends GenericProtocol {
 		logger.info("Connection from {} is down, cause: {}", event.getNode(), event.getCause());
 		Host peer = event.getNode();
 
+		if(pendingActive.contains(peer)) {
+			pendingActive.remove(peer);
+		}
+		
+		
 		if (activeView.contains(peer)) {
 			activeView.remove(peer);
+			logger.info("Someone disconnect from me " + peer.toString());
 			closeConnection(peer);
 			addToPassiveView(peer);
 			triggerNotification(new NeighbourDown(event.getNode()));

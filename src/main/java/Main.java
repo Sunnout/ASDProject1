@@ -46,12 +46,12 @@ public class Main {
         logger.info("Hello, I am {}", myself);
 
         // Application
-        BroadcastApp broadcastApp = new BroadcastApp(myself, props, PlumtreeBroadcast.PROTOCOL_ID);
+        BroadcastApp broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
         
         // Broadcast Protocol
 //        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
-//        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
-        PlumtreeBroadcast broadcast = new PlumtreeBroadcast(props, myself);
+        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
+//        PlumtreeBroadcast broadcast = new PlumtreeBroadcast(props, myself);
 
         // Membership Protocol
         HyParView membership = new HyParView(props, myself);
