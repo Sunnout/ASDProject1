@@ -13,11 +13,8 @@ public class EagerPushMessage extends ProtoMessage {
 
     private final UUID mid;
     private final Host sender;
-
     private final short toDeliver;
     private final byte[] content;
-
-    //TODO need hop count?
 
     @Override
     public String toString() {

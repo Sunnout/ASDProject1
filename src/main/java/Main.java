@@ -10,7 +10,6 @@ import protocols.apps.BroadcastApp;
 import protocols.broadcast.eagerpush.EagerPushBroadcast;
 import protocols.broadcast.plumtree.PlumtreeBroadcast;
 import protocols.membership.cyclon.Cyclon;
-import protocols.membership.hyparview.HyParView;
 import utils.InterfaceToIp;
 
 
@@ -50,9 +49,8 @@ public class Main {
         BroadcastApp broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
         
         // Broadcast Protocol
-//        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
-        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
-//        PlumtreeBroadcast broadcast = new PlumtreeBroadcast(props, myself);
+//        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
+        PlumtreeBroadcast broadcast = new PlumtreeBroadcast(props, myself);
 
         // Membership Protocol
 //        HyParView membership = new HyParView(props, myself);
