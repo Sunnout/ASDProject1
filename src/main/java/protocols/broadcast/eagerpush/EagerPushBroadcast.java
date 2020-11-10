@@ -32,14 +32,14 @@ public class EagerPushBroadcast extends GenericProtocol {
 	// Protocol information, to register in babel
 	public static final String PROTOCOL_NAME = "EagerPush";
 	public static final short PROTOCOL_ID = 500;
-	
-	// TODO: Protocol parameters to put in config.properties
-	public static final int CLEAR_RECEIVED_TIMEOUT = 5000; // Timeout to clear received messages
 
 	private final Host myself; // My own address/port
 	private final Set<Host> neighbours; // Set of known neighbours
 	private final Set<UUID> received; // Set of received msgIds
 	private final Map<UUID, Long> receivedTimes; // Map of <msgIds, receivedTimes>
+	
+	// Protocol parameters
+	private final int clearReceivedTimeout; // Timeout to clear received messages
 	private final int fanout; // Number of neighbours to send gossip message to
 
 	private boolean channelReady;
@@ -51,7 +51,10 @@ public class EagerPushBroadcast extends GenericProtocol {
 		received = new HashSet<>();
 		channelReady = false;
 		receivedTimes = new HashMap<>();
-		fanout = (int)Math.ceil(Math.log(Integer.parseInt(properties.getProperty("node_magnitude"))));
+		
+		// Get some configurations from properties file
+		clearReceivedTimeout = Integer.parseInt(properties.getProperty("clear_received_time", "5000"));
+		fanout = (int)Math.ceil(Math.log(Integer.parseInt(properties.getProperty("node_magnitude", "10"))));
 
 		/*--------------------- Register Request Handlers ----------------------------- */
 		registerRequestHandler(BroadcastRequest.REQUEST_ID, this::uponBroadcastRequest);
@@ -67,7 +70,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 
 	@Override
 	public void init(Properties props) {
-		setupPeriodicTimer(new ClearReceivedMessagesTimer(), CLEAR_RECEIVED_TIMEOUT, CLEAR_RECEIVED_TIMEOUT);
+		setupPeriodicTimer(new ClearReceivedMessagesTimer(), clearReceivedTimeout, clearReceivedTimeout);
 	}
 
 	// Upon receiving the channelId from the membership, register callbacks and serializers
@@ -138,7 +141,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 		Iterator<UUID> it = received.iterator();
 		while (it.hasNext()) {
 			UUID msgId = (UUID)it.next();
-			if(System.currentTimeMillis() > receivedTimes.get(msgId) + CLEAR_RECEIVED_TIMEOUT) {
+			if(System.currentTimeMillis() > receivedTimes.get(msgId) + clearReceivedTimeout) {
 				logger.debug("Removed one");
 				receivedTimes.remove(msgId);
 				it.remove();

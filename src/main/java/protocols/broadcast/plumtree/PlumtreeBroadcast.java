@@ -42,13 +42,6 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	public static final String PROTOCOL_NAME = "Plumtree";
 	public static final short PROTOCOL_ID = 600;
 
-	// TODO: Protocol parameters to put in config.properties
-	public static final int CLEAR_RECEIVED_TIMEOUT = 5000; // Timeout to clear received messages
-	public static final int ANNOUNCEMENT_TIMEOUT = 2000; // Timeout to send compact announcements
-	public static final int LONGER_MISSING_TIMEOUT = 500; // Longer timeout to graft missing message
-	public static final int SHORTER_MISSING_TIMEOUT = 400; // Shorter timeout to graft missing message
-	public static final int THRESHOLD = 3; // Threshold to perform optimization
-
 	private final Host myself; // My own address/port
 	private final Set<Host> neighbours; // Known neighbours
 	private final Set<Host> eagerPushPeers; // Neighbours with which to use eager push gossip
@@ -58,8 +51,15 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private final Map<UUID, PlumtreeGossipMessage> received; // Map of <msgIds, receivedMessages>
 	private final Map<UUID, Long> receivedTimes; // Map of <msgIds, receivedTimes>
 	private final Map<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
-	private final Set<UUID> alreadyGrafted;
-	private boolean sentAnnouncements;
+	private final Set<UUID> alreadyGrafted; // Ids of messages that were grafted
+	private boolean sentAnnouncements; // If announcements were sent within this period
+	
+	// Protocol parameters
+	private final int clearReceivedTimeout; // Timeout to clear received messages
+	private final int announcementTimeout; // Timeout to send compact announcements
+	private final int longerMissingTimeout; // Longer timeout to graft missing message
+	private final int shorterMissingTimeout; // Shorter timeout to graft missing message
+	private final int optimizationThreshold; // Threshold to perform optimization
 	
 	// Message counters
 	private int nSentGossipMsgs;
@@ -88,6 +88,13 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		alreadyGrafted = new HashSet<>();
 		sentAnnouncements = false;
 		
+		// Get some configurations from properties file
+		clearReceivedTimeout = Integer.parseInt(properties.getProperty("clear_received_time", "5000"));
+		announcementTimeout = Integer.parseInt(properties.getProperty("announcement_timeout", "2000"));
+		longerMissingTimeout = Integer.parseInt(properties.getProperty("longer_missing_timeout", "500"));
+		shorterMissingTimeout = Integer.parseInt(properties.getProperty("shorter_missing_timeout", "400"));
+		optimizationThreshold = Integer.parseInt(properties.getProperty("optimization_threshold", "3"));
+
 		nSentGossipMsgs = 0;
 		nSentGraftMsgs = 0;
 		nSentPruneMsgs = 0;
@@ -117,8 +124,8 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	@Override
 	public void init(Properties props) {
 		//Setup the timer used to send compact announcements
-		setupPeriodicTimer(new SendAnnouncementsTimer(), ANNOUNCEMENT_TIMEOUT, ANNOUNCEMENT_TIMEOUT);
-		setupPeriodicTimer(new ClearReceivedMessagesTimer(), CLEAR_RECEIVED_TIMEOUT, CLEAR_RECEIVED_TIMEOUT);
+		setupPeriodicTimer(new SendAnnouncementsTimer(), announcementTimeout, announcementTimeout);
+		setupPeriodicTimer(new ClearReceivedMessagesTimer(), clearReceivedTimeout, clearReceivedTimeout);
 	}
 
 	private void uponChannelCreated(ChannelCreated notification, short sourceProto) {
@@ -212,7 +219,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 				List<Announcement> announcements = new ArrayList<Announcement>();
 				announcements.add(new Announcement(from, msg.getRound()));
 				missingMessages.put(id, announcements);
-				long timer = setupTimer(new MissingMessageTimer(id), LONGER_MISSING_TIMEOUT);
+				long timer = setupTimer(new MissingMessageTimer(id), longerMissingTimeout);
 				missingMessageTimers.put(id, timer);
 			}
 		});
@@ -286,7 +293,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		// Delete current timer and create smaller one
 		UUID mid = missingMessageTimer.getMessageId();
 		missingMessageTimers.remove(mid);
-		long timer = setupTimer(new MissingMessageTimer(mid), SHORTER_MISSING_TIMEOUT);
+		long timer = setupTimer(new MissingMessageTimer(mid), shorterMissingTimeout);
 		missingMessageTimers.put(mid, timer);
 
 		// Only send graft is it wasn't sent already and then remove it from the already grafted
@@ -322,7 +329,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		Iterator<Entry<UUID, PlumtreeGossipMessage>> it = received.entrySet().iterator();
 		while (it.hasNext()) {
 			Entry<UUID, PlumtreeGossipMessage> entry = it.next();
-			if(System.currentTimeMillis() > receivedTimes.get(entry.getKey()) + CLEAR_RECEIVED_TIMEOUT) {
+			if(System.currentTimeMillis() > receivedTimes.get(entry.getKey()) + clearReceivedTimeout) {
 				receivedTimes.remove(entry.getKey());
 				it.remove();
 			}
@@ -369,7 +376,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			int r = announcement.getRound();
 			int round = msg.getRound()-1;
 			Host sender = announcement.getSender();
-			if(r < round && (round - r) >= THRESHOLD && neighbours.contains(sender)) {
+			if(r < round && (round - r) >= optimizationThreshold && neighbours.contains(sender)) {
 				PlumtreeGraftMessage graftMsg = new PlumtreeGraftMessage(UUID.randomUUID(), myself, r, null);
 				sendMessage(graftMsg, sender);
 				logger.info("Sent Graft {} to {}", null, sender);

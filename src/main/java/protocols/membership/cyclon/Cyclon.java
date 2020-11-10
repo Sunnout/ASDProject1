@@ -48,16 +48,18 @@ public class Cyclon extends GenericProtocol {
 	private final Set<Host> pending; // Peers I am trying to connect to
 	private final Map<Host, Integer> membersAge;
 	private final Map<Host, List<Connection>> pendingSampleReplies;
+	private Host lastSentHost;
+	private List<Connection> lastSentSample;
 
+	// Protocol parameters
 	private final int sampleTime; // Timeout for samples
 	private final int subsetSize; // Maximum size of sample
+	
 	private int messagesSent;
 	private long bytesSent;
 
-	private final int channelId; // Id of the created channel
+	private final int channelId;
 
-	private Host lastSentHost;
-	private List<Connection> lastSentSample;
 
 	public Cyclon(Properties props, Host self) throws IOException, HandlerRegistrationException {
 		super(PROTOCOL_NAME, PROTOCOL_ID);
@@ -69,11 +71,12 @@ public class Cyclon extends GenericProtocol {
 		this.lastSentSample = null;
 		this.pendingSampleReplies = new HashMap<>();
 
-		this.messagesSent = 0;
-
-		// Get some configurations from the properties file
+		// Get some configurations from properties file
 		this.subsetSize = Integer.parseInt(props.getProperty("sample_size", "6"));
 		this.sampleTime = Integer.parseInt(props.getProperty("sample_time", "2000")); // 2 seconds
+		
+		// Message counters
+		this.messagesSent = 0;
 
 		String cMetricsInterval = props.getProperty("channel_metrics_interval", "20000"); // 20 seconds
 

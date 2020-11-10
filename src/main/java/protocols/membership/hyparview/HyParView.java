@@ -47,16 +47,18 @@ public class HyParView extends GenericProtocol {
 	public final static String PROTOCOL_NAME = "HyParView";
 
 	private final Host self; // My own address/port
-	private final Set<Host> activeView; // small active view of size fanout +1
-	private final Set<Host> passiveView; // large passive view of size greater than log(n) 4
+	private final Set<Host> activeView; // Small active view of size fanout+1
+	private final Set<Host> passiveView; // Large passive view of size greater than log(n)
 	private final Set<Host> pendingActive, pendingNeighbour, testNeighbours;
 
-	private final int fanout, passiveViewSize; // param: maximum size of sample;
-	private final int ARWL, PRWL, ka, kb; // protocol parameters
-
+	// Protocol parameters
+	private final int fanout, passiveViewSize;
+	private final int ARWL, PRWL, ka, kb;
+	private final int shuffleTimeout, neighbourTimeout;
+	
 	private final Random rnd;
 
-	private final int channelId; // Id of the created channel
+	private final int channelId;
 
 	public HyParView(Properties props, Host self) throws IOException, HandlerRegistrationException {
 		super(PROTOCOL_NAME, PROTOCOL_ID);
@@ -71,13 +73,15 @@ public class HyParView extends GenericProtocol {
 
 		this.rnd = new Random();
 
-		// Get some configurations from the Properties object
-		this.fanout = 3; /// TODO get from props
-		this.ARWL = 4;
-		this.PRWL = 2;
-		this.ka = 3;
-		this.kb = 6;
-		this.passiveViewSize = 8;
+		// Get some configurations from properties file
+		this.fanout = Integer.parseInt(props.getProperty("fanout", "3"));
+		this.ARWL = Integer.parseInt(props.getProperty("arwl", "4"));
+		this.PRWL = Integer.parseInt(props.getProperty("prwl", "2"));
+		this.ka = Integer.parseInt(props.getProperty("ka", "3"));
+		this.kb = Integer.parseInt(props.getProperty("kb", "6"));
+		this.passiveViewSize = Integer.parseInt(props.getProperty("passive_view_size", "8"));
+		this.shuffleTimeout = Integer.parseInt(props.getProperty("shuffle_timeout", "7000"));
+		this.neighbourTimeout = Integer.parseInt(props.getProperty("neighbour_timeout", "7000"));
 
 		String cMetricsInterval = props.getProperty("channel_metrics_interval", "10000"); // 10 seconds
 
@@ -131,8 +135,7 @@ public class HyParView extends GenericProtocol {
 	@Override
 	public void init(Properties props) {
 
-		// Inform the dissemination protocol about the channel we created in the
-		// constructor
+		// Inform the dissemination protocol about the channel we created in the constructor
 		triggerNotification(new ChannelCreated(channelId));
 
 		// If there is a contact node, attempt to establish connection
@@ -142,7 +145,6 @@ public class HyParView extends GenericProtocol {
 				String contact = props.getProperty("contact");
 				String[] hostElems = contact.split(":");
 				Host contactHost = new Host(InetAddress.getByName(hostElems[0]), Short.parseShort(hostElems[1]));
-				// TODO add to active View or only add when forward join comes ?
 				addToActiveView(contactHost);
 				openConnection(contactHost);
 				logger.debug("sent Join Request");
@@ -154,16 +156,16 @@ public class HyParView extends GenericProtocol {
 			}
 		}
 
-		setupPeriodicTimer(new ShuffleTimer(), 7000, 7000);
-		setupPeriodicTimer(new NeighbourTimer(),7000,7000);
+		setupPeriodicTimer(new ShuffleTimer(), shuffleTimeout, shuffleTimeout);
+		setupPeriodicTimer(new NeighbourTimer(), neighbourTimeout, neighbourTimeout);
 
-		// Setup the timer to display protocol information (also registered handler
-		// previously)
+		// Setup the timer to display protocol information (also registered handler previously)
 		int pMetricsInterval = Integer.parseInt(props.getProperty("protocol_metrics_interval", "10000"));
 		if (pMetricsInterval > 0)
 			setupPeriodicTimer(new InfoTimer(), pMetricsInterval, pMetricsInterval);
 	}
 
+	
 	/*--------------------------------- Messages ---------------------------------------- */
 
 	private void uponJoinRequest(JoinRequest jrq, Host from, short sourceProto, int channelId) {
@@ -288,10 +290,8 @@ public class HyParView extends GenericProtocol {
 							done = true;
 						}
 					}
-				} else {
+				} else
 					addToPassiveView(node);
-				}
-
 			}
 		}
 	}
@@ -318,18 +318,16 @@ public class HyParView extends GenericProtocol {
 						done = true;
 					}
 				}
-			} else {
+			} else
 				addToPassiveView(node);
-			}
 		}
 	}
 
 	private void uponMsgFail(ProtoMessage msg, Host host, short destProto, Throwable throwable, int channelId) {
-		// If a message fails to be sent, for whatever reason, log the message and the
-		// reason
 		logger.error("Message {} to {} failed, reason: {}", msg, host, throwable);
 	}
 
+	
 	/*--------------------------------- Timers ---------------------------------------- */
 
 	private void uponShuffleTimer(ShuffleTimer timer, long timerId) {
@@ -405,18 +403,16 @@ public class HyParView extends GenericProtocol {
 		return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
 	}
 
-	/*
-	 * --------------------------------- TCPChannel Events
-	 * ----------------------------
-	 */
+	
+	/* --------------------------------- TCPChannel Events ---------------------------- */
 
 	// If a connection is successfully established, this event is triggered.
 	private void uponOutConnectionUp(OutConnectionUp event, int channelId) {
 		Host peer = event.getNode();
 		logger.debug("Connection to {} is up", peer);
 
-		// check if connection is pending
-		if ( pendingActive.contains(peer)) {
+		// Check if connection is pending
+		if (pendingActive.contains(peer)) {
 			if (activeView.size() >= (fanout + 1)) {
 				Host random = getRandom(activeView);
 				activeView.remove(random);
@@ -468,20 +464,16 @@ public class HyParView extends GenericProtocol {
 	}
 
 	// If a connection fails to be established, this event is triggered. In this
-	// protocol, we simply remove from the
-	// pending set. Note that this event is only triggered while attempting a
-	// connection, not after connection.
-
+	// protocol, we simply remove from the pending set.
+	// Note that this event is only triggered while attempting a connection, not after connection.
 	private void uponOutConnectionFailed(OutConnectionFailed<ProtoMessage> event, int channelId) {
 		logger.debug("Connection to {} failed cause: {}", event.getNode(), event.getCause());
 		Host peer = event.getNode();
-		if(pendingActive.contains(peer)) {
+		if(pendingActive.contains(peer))
 			pendingActive.remove(peer);
-		}
 		
-		if(pendingNeighbour.contains(peer)) {
+		if(pendingNeighbour.contains(peer))
 			pendingNeighbour.remove(peer);
-		}
 		
 		if (passiveView.contains(peer)) {
 			passiveView.remove(peer);
@@ -491,17 +483,11 @@ public class HyParView extends GenericProtocol {
 				openConnection(p);
 			}
 		}
-		
-	
-		
-
 	}
 
-	// If someone established a connection to me, 
+	// If someone established a connection to me
 	private void uponInConnectionUp(InConnectionUp event, int channelId) {
 		logger.debug("Connection from {} is up", event.getNode());
-		
-		
 	}
 
 	// A connection someone established to me is disconnected.
@@ -509,9 +495,8 @@ public class HyParView extends GenericProtocol {
 		logger.debug("Connection from {} is down, cause: {}", event.getNode(), event.getCause());
 		Host peer = event.getNode();
 
-		if(pendingActive.contains(peer)) {
+		if(pendingActive.contains(peer))
 			pendingActive.remove(peer);
-		}
 		
 		
 		if (activeView.contains(peer)) {
@@ -525,22 +510,9 @@ public class HyParView extends GenericProtocol {
 				pendingNeighbour.add(p);
 				openConnection(p);
 			}
-
 		}
 	}
 
-	
-	private void myprints() {
-		StringBuilder sb = new StringBuilder("Channel Metrics:\n");
-		sb.append("Active View :\n");
-		activeView.forEach(c -> sb.append(String.format("\tNode : %s \n", c.toString())));
-
-		sb.append("Passive View:\n");
-		passiveView.forEach(c -> sb.append(String.format("\tNode : %s \n", c.toString())));
-
-		sb.setLength(sb.length() - 1);
-		logger.info(sb);
-	}
 	
 	/* --------------------------------- Metrics ---------------------------- */
 
