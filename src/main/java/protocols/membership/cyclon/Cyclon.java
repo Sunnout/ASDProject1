@@ -5,6 +5,9 @@ import babel.exceptions.HandlerRegistrationException;
 import babel.generic.ProtoMessage;
 import channel.tcp.TCPChannel;
 import channel.tcp.events.*;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.EmptyByteBuf;
+import io.netty.buffer.Unpooled;
 import network.data.Host;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -18,6 +21,7 @@ import protocols.membership.cyclon.timers.InfoTimer;
 import protocols.membership.cyclon.timers.SampleTimer;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.util.*;
 
@@ -37,6 +41,8 @@ public class Cyclon extends GenericProtocol {
 
 	private final int sampleTime; // Timeout for samples
 	private final int subsetSize; // Maximum size of sample
+	private int messagesSent;
+	private long bytesSent;
 
 	private final int channelId; // Id of the created channel
 
@@ -52,6 +58,8 @@ public class Cyclon extends GenericProtocol {
 		this.lastSentHost = null;
 		this.lastSentSample = null;
 		this.pendingSampleReplies = new HashMap<>();
+
+		this.messagesSent = 0;
 
 		// Get some configurations from the properties file
 		this.subsetSize = Integer.parseInt(props.getProperty("sample_size", "6"));
@@ -143,7 +151,9 @@ public class Cyclon extends GenericProtocol {
 			sample.add(new Connection(h, membersAge.get(h)));
 
 		sample.add(new Connection(self, 0));
-		sendMessage(new SampleMessage(sample), target);
+		SampleMessage message = new SampleMessage(sample);
+		sendMessage(message, target);
+		messagesSent++;
 		lastSentSample = sample;
 		lastSentHost = target;
 	}
@@ -162,9 +172,11 @@ public class Cyclon extends GenericProtocol {
 
 	// Sends a shuffle reply to the process that sent a shuffle request
 	private void sendShuffleReply(Host target, List<Connection> sample) {
-		if (membership.contains(target))
-			sendMessage(new SampleMessageReply(sample), target);
-		else
+		if (membership.contains(target)) {
+			SampleMessageReply message = new SampleMessageReply(sample);
+			sendMessage(message, target);
+			messagesSent++;
+		} else
 			pendingSampleReplies.put(target, sample);
 	}
 
@@ -352,24 +364,35 @@ public class Cyclon extends GenericProtocol {
 	// "getOldInConnections" and "getOldOutConnections" returns connections that have already been closed.
 	private void uponChannelMetrics(ChannelMetrics event, int channelId) {
 		StringBuilder sb = new StringBuilder("Channel Metrics:\n");
-		sb.append("In channels:\n");
-		event.getInConnections()
-				.forEach(c -> sb.append(
-						String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s)\n", c.getPeer(), c.getSentAppMessages(),
-								c.getSentAppBytes(), c.getReceivedAppMessages(), c.getReceivedAppBytes())));
-		event.getOldInConnections()
-				.forEach(c -> sb.append(
-						String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s) (old)\n", c.getPeer(), c.getSentAppMessages(),
-								c.getSentAppBytes(), c.getReceivedAppMessages(), c.getReceivedAppBytes())));
-		sb.append("Out channels:\n");
-		event.getOutConnections()
-				.forEach(c -> sb.append(
-						String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s)\n", c.getPeer(), c.getSentAppMessages(),
-								c.getSentAppBytes(), c.getReceivedAppMessages(), c.getReceivedAppBytes())));
-		event.getOldOutConnections()
-				.forEach(c -> sb.append(
-						String.format("\t%s: msgOut=%s (%s) msgIn=%s (%s) (old)\n", c.getPeer(), c.getSentAppMessages(),
-								c.getSentAppBytes(), c.getReceivedAppMessages(), c.getReceivedAppBytes())));
+		long bytesSent = 0;
+		long bytesReceived = 0;
+		long messagesSent = 0;
+		long messagesReceived = 0;
+
+		for(ChannelMetrics.ConnectionMetrics c: event.getOutConnections()){
+			bytesSent += c.getSentAppBytes();
+			messagesSent += c.getSentAppMessages();
+		}
+
+		for(ChannelMetrics.ConnectionMetrics c: event.getOldOutConnections()){
+			bytesSent += c.getSentAppBytes();
+			messagesSent += c.getSentAppMessages();
+		}
+
+		for(ChannelMetrics.ConnectionMetrics c: event.getInConnections()){
+			bytesReceived += c.getReceivedAppBytes();
+			messagesReceived += c.getReceivedAppMessages();
+		}
+
+		for(ChannelMetrics.ConnectionMetrics c: event.getOldInConnections()){
+			bytesReceived += c.getReceivedAppBytes();
+			messagesReceived += c.getReceivedAppMessages();
+		}
+
+		sb.append(String.format("\tBytesSent = %s\n", bytesSent));
+		sb.append(String.format("\tBytesReceived = %s\n", bytesReceived));
+		sb.append(String.format("\tMessagesSent = %s\n", messagesSent));
+		sb.append(String.format("\tMessagesReceived = %s\n", messagesReceived));
 		sb.setLength(sb.length() - 1);
 		logger.info(sb);
 	}
