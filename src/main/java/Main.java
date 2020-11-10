@@ -7,7 +7,9 @@ import org.apache.logging.log4j.Logger;
 import babel.core.Babel;
 import network.data.Host;
 import protocols.apps.BroadcastApp;
+import protocols.broadcast.eagerpush.EagerPushBroadcast;
 import protocols.broadcast.plumtree.PlumtreeBroadcast;
+import protocols.membership.cyclon.Cyclon;
 import protocols.membership.hyparview.HyParView;
 import utils.InterfaceToIp;
 
@@ -53,8 +55,8 @@ public class Main {
         PlumtreeBroadcast broadcast = new PlumtreeBroadcast(props, myself);
 
         // Membership Protocol
-        HyParView membership = new HyParView(props, myself);
-//        Cyclon membership = new Cyclon(props, myself);
+//        HyParView membership = new HyParView(props, myself);
+        Cyclon membership = new Cyclon(props, myself);
 
 
         //Register applications in babel

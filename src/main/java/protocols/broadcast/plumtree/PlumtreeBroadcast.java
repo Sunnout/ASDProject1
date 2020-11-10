@@ -1,15 +1,8 @@
 package protocols.broadcast.plumtree;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Properties;
-import java.util.Set;
-import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -53,10 +46,10 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private final Set<Host> eagerPushPeers; // Neighbours with which to use eager push gossip
 	private final Set<Host> lazyPushPeers; // Neighbours with which to use lazy push gossip
 	private PlumtreeIHaveMessage lazyIHaveMessage; // IHAVE msg with announcements to be sent
-	private final HashMap<UUID, List<Announcement>> missingMessages; // Map of <msgIds, list of announcements>
-	private final HashMap<UUID, PlumtreeGossipMessage> received; // Map of <msgIds, receivedMessages>
-	private final HashMap<UUID, Long> receivedTimes; // Map of <msgIds, receivedTimes>
-	private final HashMap<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
+	private final Map<UUID, List<Announcement>> missingMessages; // Map of <msgIds, list of announcements>
+	private final Map<UUID, PlumtreeGossipMessage> received; // Map of <msgIds, receivedMessages>
+	private final Map<UUID, Long> receivedTimes; // Map of <msgIds, receivedTimes>
+	private final Map<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
 	private final Set<UUID> alreadyGrafted;
 	private boolean sentAnnouncements;
 	
