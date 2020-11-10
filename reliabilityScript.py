@@ -1,6 +1,6 @@
 #start_name = "./results/results-Alexandres-MBP.lan-{}.txt"
-start_name = "./results_andre/results-andre-laptop-{}.txt"
-n_processes = 6
+start_name = "./results/results-andre-laptop-{}.txt"
+n_processes = 20
 starting_port = 5000
 
 messagesReceived = 0

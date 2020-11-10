@@ -47,7 +47,7 @@ public class Main {
         logger.info("Hello, I am {}", myself);
 
         // Application
-        BroadcastApp broadcastApp = new BroadcastApp(myself, props, Cyclon.PROTOCOL_ID);
+        BroadcastApp broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
         
         // Broadcast Protocol
 //        FloodBroadcast broadcast = new FloodBroadcast(props, myself);
@@ -72,6 +72,8 @@ public class Main {
         //Start babel and protocol threads
         babel.start();
 
+        // Prints number of different messages of Plumtree
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> broadcast.printMetrics()));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
 
     }

@@ -12,26 +12,21 @@ import network.data.Host;
 public class Shuffle extends ProtoMessage {
 
     public final static short MSG_ID = 692;
-    private final Set<Host> node_activeView, node_passiveView;	
+    private final Set<Host> nodes;	
     private int ttl;
 	private final Host node;
 	
-	public Shuffle(Host node, Set<Host> node_activeView, Set<Host> node_passiveView, int ttl) {
+	public Shuffle(Host node, Set<Host> nodes, int ttl) {
 		super(MSG_ID);
 		this.node = node;
-		this.node_activeView = node_activeView;
-		this.node_passiveView = node_passiveView;
+		this.nodes = nodes;
 		this.ttl = ttl;
 	}
 	
 	
 	
-	public Set<Host> getNode_activeView() {
-		return node_activeView;
-	}
-
-	public Set<Host> getNode_passiveView() {
-		return node_passiveView;
+	public Set<Host> getNodes() {
+		return nodes;
 	}
 
 	public Host getNode() {
@@ -43,20 +38,19 @@ public class Shuffle extends ProtoMessage {
 		return ttl;
 	}
 	
+	public void setTTL(int ttl) {
+		this.ttl = ttl;
+	}
+	
 	 public static ISerializer<Shuffle> serializer = new ISerializer<Shuffle>() {
 	        @Override
 	        public void serialize(Shuffle shuffleMessage, ByteBuf out) throws IOException {
-	        	Set<Host> active = shuffleMessage.getNode_activeView();
-	        	Set<Host> passive = shuffleMessage.getNode_passiveView();
+	        	Set<Host> active = shuffleMessage.getNodes();
 	        	Host node = shuffleMessage.getNode();
 	        	int ttl  = shuffleMessage.getTTL();
 	        	
 	            out.writeInt(active.size());
 	            for (Host h : active)
-	                Host.serializer.serialize(h, out);
-	            
-	            out.writeInt(passive.size());
-	            for (Host h : passive)
 	                Host.serializer.serialize(h, out);
 	            
                 Host.serializer.serialize(node, out);
@@ -72,17 +66,13 @@ public class Shuffle extends ProtoMessage {
 	            for (int i = 0; i < size; i++)
 	                active_subset.add(Host.serializer.deserialize(in));
 	            
-	            size = in.readInt();
-	            Set<Host> passive_subset = new HashSet<>(size, 1);
-	            for (int i = 0; i < size; i++)
-	                passive_subset.add(Host.serializer.deserialize(in));
 	            
 	            Host node = Host.serializer.deserialize(in);
 	            int ttl = in.readInt();
 	            
 	            
 	            
-	            return new Shuffle(node,active_subset,passive_subset,ttl);
+	            return new Shuffle(node,active_subset,ttl);
 	        }
 	    };
 	
