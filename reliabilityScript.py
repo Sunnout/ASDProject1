@@ -1,6 +1,6 @@
 #start_name = "./results/results-Alexandres-MBP.lan-{}.txt"
-start_name = "./results/results-andre-laptop-{}.txt"
-n_processes = 20
+start_name = "./results/results-MacBook-Pro-de-Ema.local-{}.txt"
+n_processes = 30
 starting_port = 5000
 
 messagesReceived = 0
@@ -44,6 +44,6 @@ plt.xlabel("\n Threads: 32", **font)
 for i, v in enumerate(avg_reliabilities):
     plt.text(xlocs[i] -0.16, v + 0.05, str("{:.2f}".format(v)))
     
-#plt.show()
-plt.savefig('plot.pdf', format='pdf')
+plt.show()
+#plt.savefig('plot.pdf', format='pdf')
  

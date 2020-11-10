@@ -1,5 +1,5 @@
 start_name = "./results/results-MacBook-Pro-de-Ema.local-{}.txt"
-n_processes = 6
+n_processes = 30
 starting_port = 5000
 
 
@@ -31,8 +31,8 @@ for port in range(starting_port, starting_port + n_processes):
             elif msg_deliver_time[line[3]] < deliver_time_obj:
                 msg_deliver_time[line[3]] = deliver_time_obj
 
-print(len(msg_send_time))
-print(len(msg_deliver_time))
+#print(len(msg_send_time))
+#print(len(msg_deliver_time))
 
 latency = {}
 for key in msg_send_time:
@@ -47,7 +47,7 @@ for key in latency:
 
 avg_broadcast_latency = total_time / len(latency) / 1000000
     
-print(avg_broadcast_latency)
+print("Average Broadcast Latency: {}".format(avg_broadcast_latency))
 
 
 import matplotlib.pyplot as plt
