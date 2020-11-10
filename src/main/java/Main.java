@@ -55,8 +55,8 @@ public class Main {
         PlumtreeBroadcast broadcast = new PlumtreeBroadcast(props, myself);
 
         // Membership Protocol
-//        HyParView membership = new HyParView(props, myself);
-        Cyclon membership = new Cyclon(props, myself);
+        HyParView membership = new HyParView(props, myself);
+//        Cyclon membership = new Cyclon(props, myself);
 
 
         //Register applications in babel
