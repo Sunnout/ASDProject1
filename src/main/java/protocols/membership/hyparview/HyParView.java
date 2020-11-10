@@ -79,7 +79,7 @@ public class HyParView extends GenericProtocol {
 		this.PRWL = Integer.parseInt(props.getProperty("prwl", "2"));
 		this.ka = Integer.parseInt(props.getProperty("ka", "3"));
 		this.kb = Integer.parseInt(props.getProperty("kb", "6"));
-		this.passiveViewSize = Integer.parseInt(props.getProperty("passive_view_size", "8"));
+		this.passiveViewSize = Integer.parseInt(props.getProperty("passive_view_size", "16"));
 		this.shuffleTimeout = Integer.parseInt(props.getProperty("shuffle_timeout", "7000"));
 		this.neighbourTimeout = Integer.parseInt(props.getProperty("neighbour_timeout", "7000"));
 

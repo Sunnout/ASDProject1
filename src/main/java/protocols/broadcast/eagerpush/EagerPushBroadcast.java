@@ -176,4 +176,10 @@ public class EagerPushBroadcast extends GenericProtocol {
 		Collections.shuffle(list);
 		return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
 	}
+	
+	/*----------------------------------- Metrics -------------------------------------- */
+	
+	public void printMetrics() {
+		System.out.println("Uau...");
+	}
 }

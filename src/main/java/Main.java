@@ -5,11 +5,13 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import babel.core.Babel;
+import babel.core.GenericProtocol;
 import network.data.Host;
 import protocols.apps.BroadcastApp;
 import protocols.broadcast.eagerpush.EagerPushBroadcast;
 import protocols.broadcast.plumtree.PlumtreeBroadcast;
 import protocols.membership.cyclon.Cyclon;
+import protocols.membership.hyparview.HyParView;
 import utils.InterfaceToIp;
 
 
@@ -46,18 +48,58 @@ public class Main {
         logger.info("Hello, I am {}", myself);
 
         // Application
-        BroadcastApp broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
+        BroadcastApp broadcastApp;
+        GenericProtocol broadcast;
+        GenericProtocol membership;
         
-        // Broadcast Protocol
-//        EagerPushBroadcast broadcast = new EagerPushBroadcast(props, myself);
-        PlumtreeBroadcast broadcast = new PlumtreeBroadcast(props, myself);
+        int protocolCombination = Integer.parseInt(props.getProperty("dissemination_and_membership", "0"));
+        switch(protocolCombination) {
+        	case 0:
+                broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
+                broadcast = new EagerPushBroadcast(props, myself);
+                membership = new Cyclon(props, myself);
+                doSomeStuff(babel, broadcastApp, broadcast, membership, props);
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
+                break;
 
-        // Membership Protocol
-//        HyParView membership = new HyParView(props, myself);
-        Cyclon membership = new Cyclon(props, myself);
+        	case 1:
+                broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
+                broadcast = new EagerPushBroadcast(props, myself);
+                membership = new HyParView(props, myself);
+                doSomeStuff(babel, broadcastApp, broadcast, membership, props);
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
+                break;
 
+        	case 2:
+                broadcastApp = new BroadcastApp(myself, props, PlumtreeBroadcast.PROTOCOL_ID);
+                broadcast = new PlumtreeBroadcast(props, myself);
+                membership = new Cyclon(props, myself);
+                doSomeStuff(babel, broadcastApp, broadcast, membership, props);
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> ((PlumtreeBroadcast)broadcast).printMetrics()));
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
+                break;
 
-        //Register applications in babel
+        	case 3:
+                broadcastApp = new BroadcastApp(myself, props, PlumtreeBroadcast.PROTOCOL_ID);
+                broadcast = new PlumtreeBroadcast(props, myself);
+                membership = new HyParView(props, myself);
+                doSomeStuff(babel, broadcastApp, broadcast, membership, props);
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> ((PlumtreeBroadcast)broadcast).printMetrics()));
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
+                break;
+
+        	default:
+        		broadcastApp = new BroadcastApp(myself, props, EagerPushBroadcast.PROTOCOL_ID);
+                broadcast = new EagerPushBroadcast(props, myself);
+                membership = new Cyclon(props, myself);
+                doSomeStuff(babel, broadcastApp, broadcast, membership, props);
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
+                break;
+        }
+    }
+    
+    private static final void doSomeStuff(Babel babel, BroadcastApp broadcastApp,
+    		GenericProtocol broadcast, GenericProtocol membership, Properties props ) throws Exception {
         babel.registerProtocol(broadcastApp);
         babel.registerProtocol(broadcast);
         babel.registerProtocol(membership);
@@ -69,11 +111,6 @@ public class Main {
 
         //Start babel and protocol threads
         babel.start();
-
-        // Prints number of different messages of Plumtree
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> broadcast.printMetrics()));
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
-
     }
 
 }
