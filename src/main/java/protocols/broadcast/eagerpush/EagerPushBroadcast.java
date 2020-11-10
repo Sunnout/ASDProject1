@@ -1,13 +1,7 @@
 package protocols.broadcast.eagerpush;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -19,9 +13,11 @@ import network.data.Host;
 import protocols.broadcast.common.BroadcastRequest;
 import protocols.broadcast.common.DeliverNotification;
 import protocols.broadcast.eagerpush.messages.EagerPushMessage;
+import protocols.broadcast.plumtree.timers.ClearReceivedMessagesTimer;
 import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
+import protocols.membership.cyclon.timers.SampleTimer;
 
 public class EagerPushBroadcast extends GenericProtocol {
 	private static final Logger logger = LogManager.getLogger(EagerPushBroadcast.class);
@@ -29,20 +25,23 @@ public class EagerPushBroadcast extends GenericProtocol {
 	// Protocol information, to register in babel
 	public static final String PROTOCOL_NAME = "EagerPush";
 	public static final short PROTOCOL_ID = 500;
+	public static final int CLEAR_RECEIVED_TIMEOUT = 5000; // Timeout to clear received messages
 
 	private final Host myself; // My own address/port
 	private final Set<Host> neighbours; // My known neighbours (a.k.a peers the membership protocol told me about)
 	private final Set<UUID> received; // Set of received messages (since we do not want to deliver the same msg twice)
+	private final Map<UUID, Long> receivedTimes; // Map of <msgIds, receivedTimes>
 	private final int fanout; // Number of neighbours to send gossip message to
 
 	private boolean channelReady;
 
-	public EagerPushBroadcast(Properties properties, Host myself) throws IOException, HandlerRegistrationException {
+	public EagerPushBroadcast(Properties properties, Host myself) throws HandlerRegistrationException {
 		super(PROTOCOL_NAME, PROTOCOL_ID);
 		this.myself = myself;
 		neighbours = new HashSet<>();
 		received = new HashSet<>();
 		channelReady = false;
+		receivedTimes = new HashMap<>();
 		fanout = (int)Math.ceil(Math.log(Integer.parseInt(properties.getProperty("node_magnitude"))));
 
 		/*--------------------- Register Request Handlers ----------------------------- */
@@ -52,12 +51,14 @@ public class EagerPushBroadcast extends GenericProtocol {
 		subscribeNotification(NeighbourUp.NOTIFICATION_ID, this::uponNeighbourUp);
 		subscribeNotification(NeighbourDown.NOTIFICATION_ID, this::uponNeighbourDown);
 		subscribeNotification(ChannelCreated.NOTIFICATION_ID, this::uponChannelCreated);
+
+		/*--------------------- Register Timer Handlers ------------------------- */
+		registerTimerHandler(ClearReceivedMessagesTimer.TIMER_ID, this::uponClearReceivedMessagesTimer);
 	}
 
 	@Override
 	public void init(Properties props) {
-		// Nothing to do here, we just wait for event from the membership or the
-		// application
+		setupPeriodicTimer(new ClearReceivedMessagesTimer(), CLEAR_RECEIVED_TIMEOUT, CLEAR_RECEIVED_TIMEOUT);
 	}
 
 	// Upon receiving the channelId from the membership, register callbacks and serializers
@@ -94,8 +95,11 @@ public class EagerPushBroadcast extends GenericProtocol {
 	
 	private void uponEagerPushMessage(EagerPushMessage msg, Host from, short sourceProto, int channelId) {
 		logger.info("Received {} from {}", msg, from);
+		UUID msgId = msg.getMid();
+		long receivedTime = System.currentTimeMillis();
 		// If we already received it once, do nothing
 		if (received.add(msg.getMid())) {
+			receivedTimes.put(msgId, receivedTime);
 			// Deliver the message to the application
 			triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
 
@@ -124,6 +128,22 @@ public class EagerPushBroadcast extends GenericProtocol {
 		return new HashSet<>(list.subList(0, Math.min(sampleSize, list.size())));
 	}
 
+	/*-------------------------------------- Timers ----------------------------------------- */
+
+	private void uponClearReceivedMessagesTimer(ClearReceivedMessagesTimer clearReceivedMessagesTimer, long timerId) {
+		logger.info("Clearing Messages");
+		logger.info("Messages Before Cleaning: {}", received.size());
+		Iterator it = received.iterator();
+		while (it.hasNext()) {
+			UUID msgId = (UUID)it.next();
+			if(System.currentTimeMillis() > receivedTimes.get(msgId) + CLEAR_RECEIVED_TIMEOUT) {
+				logger.debug("Removed one");
+				receivedTimes.remove(msgId);
+				it.remove();
+			}
+		}
+		logger.info("Messages After Cleaning: {}", received.size());
+	}
 
 	/*--------------------------------- Notifications ---------------------------------------- */
 

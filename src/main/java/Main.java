@@ -9,6 +9,7 @@ import network.data.Host;
 import protocols.apps.BroadcastApp;
 import protocols.broadcast.eagerpush.EagerPushBroadcast;
 import protocols.broadcast.plumtree.PlumtreeBroadcast;
+import protocols.membership.cyclon.Cyclon;
 import protocols.membership.hyparview.HyParView;
 import utils.InterfaceToIp;
 
@@ -71,6 +72,8 @@ public class Main {
         //Start babel and protocol threads
         babel.start();
 
+        // Prints number of different messages of Plumtree
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> broadcast.printMetrics()));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> logger.info("Goodbye")));
 
     }
