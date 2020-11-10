@@ -402,10 +402,10 @@ public class Cyclon extends GenericProtocol {
 			messagesReceived += c.getReceivedAppMessages();
 		}
 
-		sb.append(String.format("\tBytesSent = %s\n", bytesSent));
-		sb.append(String.format("\tBytesReceived = %s\n", bytesReceived));
-		sb.append(String.format("\tMessagesSent = %s\n", messagesSent));
-		sb.append(String.format("\tMessagesReceived = %s\n", messagesReceived));
+		sb.append(String.format("BytesSent = %s\n", bytesSent));
+		sb.append(String.format("BytesReceived = %s\n", bytesReceived));
+		sb.append(String.format("MessagesSent = %s\n", messagesSent));
+		sb.append(String.format("MessagesReceived = %s\n", messagesReceived));
 		sb.setLength(sb.length() - 1);
 		logger.info(sb);
 	}

@@ -110,7 +110,6 @@ public class EagerPushBroadcast extends GenericProtocol {
 	/*--------------------------------- Messages ---------------------------------------- */
 	
 	private void uponEagerPushMessage(EagerPushMessage msg, Host from, short sourceProto, int channelId) {
-		logger.info("Received {} from {}", msg, from);
 		UUID msgId = msg.getMid();
 		long receivedTime = System.currentTimeMillis();
 		
@@ -122,7 +121,6 @@ public class EagerPushBroadcast extends GenericProtocol {
 			Set<Host> sample = getRandomSubsetExcluding(neighbours, fanout, from);
 			// Simply send the message to a subset of size fanout of known neighbours
 			sample.forEach(host -> {
-				logger.info("Sent {} to {}", msg, host);
 				sendMessage(msg, host);
 			});
 		}
@@ -136,21 +134,16 @@ public class EagerPushBroadcast extends GenericProtocol {
 	/*-------------------------------------- Timers ----------------------------------------- */
 
 	private void uponClearReceivedMessagesTimer(ClearReceivedMessagesTimer clearReceivedMessagesTimer, long timerId) {
-		logger.info("Clearing Messages");
-		logger.info("Messages Before Cleaning: {}", received.size());
 		Iterator<UUID> it = received.iterator();
 		while (it.hasNext()) {
 			UUID msgId = (UUID)it.next();
 			if(System.currentTimeMillis() > receivedTimes.get(msgId) + clearReceivedTimeout) {
-				logger.debug("Removed one");
 				receivedTimes.remove(msgId);
 				it.remove();
 			}
 		}
-		logger.info("Messages After Cleaning: {}", received.size());
 	}
 
-	
 	/*--------------------------------- Notifications ---------------------------------------- */
 
 	private void uponNeighbourUp(NeighbourUp notification, short sourceProto) {
