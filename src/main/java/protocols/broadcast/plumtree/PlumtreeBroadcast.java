@@ -276,12 +276,13 @@ public class PlumtreeBroadcast extends GenericProtocol {
 			lazyPushPeers.remove(h);
 
 			missingMessages.values().forEach(list -> {
-				list.forEach(announcement -> {
-					if(announcement.getSender().equals(h))
-						list.remove(announcement);
-				});
+				Iterator<Announcement> it = list.iterator();
+				while (it.hasNext()) {
+					Announcement announcement = it.next();
+						if(announcement.getSender().equals(h))
+							it.remove();
+				}
 			});
-
 			logger.debug("Neighbour down: " + h);
 		}
 	}
