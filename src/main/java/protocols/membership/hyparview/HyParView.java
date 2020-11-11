@@ -174,7 +174,7 @@ public class HyParView extends GenericProtocol {
 
 		for (Host h : activeView) {
 			if (!h.equals(from)) {
-				logger.info("Sent Forward Join to " + h.toString());
+				logger.debug("Sent Forward Join to " + h.toString());
 				sendMessage(new ForwardJoin(from, ARWL), h);
 			}
 		}
@@ -527,7 +527,7 @@ public class HyParView extends GenericProtocol {
 		// by this protocol.
 		// It may or may not be useful to you, but at least you know it exists.
 		sb.append(getMetrics());
-		logger.info(sb);
+		logger.debug(sb);
 	}
 
 	// If we passed a value >0 in the METRICS_INTERVAL_KEY property of the channel,
