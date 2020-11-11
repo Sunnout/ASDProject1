@@ -91,7 +91,7 @@ for j in {1..2}; do
     fi
     oarsh -n $node docker exec -d node-${ii} ./start${j}.sh $i $user contact=node-00:10000 "$@"
   done
-  
-  wait
+
+  sleep 65
 done
 echo ""
