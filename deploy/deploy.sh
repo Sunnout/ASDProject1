@@ -93,10 +93,15 @@ for j in {1..1}; do
       fi
       oarsh -n $node docker exec -d node-${ii} ./start${j}.sh $i $user $k contact=node-00:10000 "$@"
     done
-    sleep 65
+
+    if [ $k -ne 2 ]; then
+      sleep 65
+    fi
 
   done
-  sleep 65
+  if [ $j -ne 1 ]; then
+    sleep 65
+  fi
 
 done
 echo ""
