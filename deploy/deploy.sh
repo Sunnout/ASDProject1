@@ -74,27 +74,30 @@ sleep 1
 echo "Executing java"
 
 printf "%.2d.. " 0
-for j in {1..2}; do
- for k in {1..3};do
-  user=$(id -u):$(id -g)
+for j in {1..1}; do
 
-  node=$(nextnode 0)
-  oarsh -n $node docker exec -d node-00 ./start${j}.sh 0 $user "$@"
+  for k in {1..2};do
+    try=$(k)
+    user=$(id -u):$(id -g)
 
-  sleep 1
+    node=$(nextnode 0)
+    oarsh -n $node docker exec -d node-00 ./start${j}.sh 0 $user "$@"
 
-  for i in $(seq 01 $(($nNodes - 1))); do
-    node=$(nextnode $i)
-    ii=$(printf "%.2d" $i)
-    echo -n "$ii.. "
-    if [ $((($i + 1) % 10)) -eq 0 ]; then
-      echo ""
-    fi
-    oarsh -n $node docker exec -d node-${ii} ./start${j}.sh $i $user $try contact=node-00:10000 "$@"
+    sleep 1
+
+    for i in $(seq 01 $(($nNodes - 1))); do
+      node=$(nextnode $i)
+      ii=$(printf "%.2d" $i)
+      echo -n "$ii.. "
+      if [ $((($i + 1) % 10)) -eq 0 ]; then
+        echo ""
+      fi
+      oarsh -n $node docker exec -d node-${ii} ./start${j}.sh $i $user $try contact=node-00:10000 "$@"
+    done
+    sleep 65
+
   done
-
   sleep 65
-done
-sleep 65
+
 done
 echo ""

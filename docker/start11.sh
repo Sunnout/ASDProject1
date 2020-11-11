@@ -2,7 +2,9 @@
 
 idx=$1
 user=$2
+try=$3
 shift
 shift
-java -DlogFilename=logs/node$idx-t3-02 -cp asdProj.jar Main -conf config.properties dissemination_and_membership=2 "$@" &> /proc/1/fd/1
-chown $user logs/node$idx-t3-02.log
+shift
+java -DlogFilename=logs/node$idx-t11-$try -cp asdProj.jar Main -conf config.properties dissemination_and_membership=2 payload_size=1024 broadcast_interval=200 "$@" &> /proc/1/fd/1
+chown $user logs/node$idx-t11-$try.log
