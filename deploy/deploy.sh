@@ -77,11 +77,10 @@ printf "%.2d.. " 0
 for j in {1..1}; do
 
   for k in {1..2}; do
-    try=$(k)
     user=$(id -u):$(id -g)
 
     node=$(nextnode 0)
-    oarsh -n $node docker exec -d node-00 ./start${j}.sh 0 $user ${try} "$@"
+    oarsh -n $node docker exec -d node-00 ./start${j}.sh 0 $user $k "$@"
 
     sleep 1
 
@@ -92,7 +91,7 @@ for j in {1..1}; do
       if [ $((($i + 1) % 10)) -eq 0 ]; then
         echo ""
       fi
-      oarsh -n $node docker exec -d node-${ii} ./start${j}.sh $i $user ${try} contact=node-00:10000 "$@"
+      oarsh -n $node docker exec -d node-${ii} ./start${j}.sh $i $user $k contact=node-00:10000 "$@"
     done
     sleep 65
 
