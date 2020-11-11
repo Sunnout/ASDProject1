@@ -24,7 +24,7 @@
         <Logger level="info" name="babel"/>
 
 
-        <Root level="debug">
+        <Root level="info">
             <AppenderRef ref="Console" level="info"/>
            <AppenderRef ref="MyFile" level="all"/>
        </Root>
