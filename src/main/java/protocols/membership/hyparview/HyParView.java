@@ -548,6 +548,35 @@ public class HyParView extends GenericProtocol {
 		sb.append("Passive View:\n");
 		passiveView.forEach(c -> sb.append(String.format("\tNode : %s \n", c.toString())));
 
+		long bytesSent = 0;
+		long bytesReceived = 0;
+		long messagesSent = 0;
+		long messagesReceived = 0;
+
+		for(ChannelMetrics.ConnectionMetrics c: event.getOutConnections()){
+			bytesSent += c.getSentAppBytes();
+			messagesSent += c.getSentAppMessages();
+		}
+
+		for(ChannelMetrics.ConnectionMetrics c: event.getOldOutConnections()){
+			bytesSent += c.getSentAppBytes();
+			messagesSent += c.getSentAppMessages();
+		}
+
+		for(ChannelMetrics.ConnectionMetrics c: event.getInConnections()){
+			bytesReceived += c.getReceivedAppBytes();
+			messagesReceived += c.getReceivedAppMessages();
+		}
+
+		for(ChannelMetrics.ConnectionMetrics c: event.getOldInConnections()){
+			bytesReceived += c.getReceivedAppBytes();
+			messagesReceived += c.getReceivedAppMessages();
+		}
+
+		sb.append(String.format("BytesSent = %s\n", bytesSent));
+		sb.append(String.format("BytesReceived = %s\n", bytesReceived));
+		sb.append(String.format("MessagesSent = %s\n", messagesSent));
+		sb.append(String.format("MessagesReceived = %s\n", messagesReceived));
 		sb.setLength(sb.length() - 1);
 		logger.info(sb);
 	}

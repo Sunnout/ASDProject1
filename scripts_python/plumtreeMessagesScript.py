@@ -1,4 +1,4 @@
-def plumtree_messages(start_name, n_processes, starting_port):
+def plumtree_messages(start_name, n_processes, starting_port, to_print=False):
     sentGossip = 0
     sentGraft = 0
     sentPrune = 0
@@ -61,20 +61,24 @@ def plumtree_messages(start_name, n_processes, starting_port):
     percentagePrune = (sentPrune / totalSent) * 100
     percentageIHave = (sentIHave / totalSent) * 100
 
-    print('Sent Gossip Messages: ', sentGossip)
-    print('Sent Graft Messages: ', sentGraft)
-    print('Sent Prune Messages: ', sentPrune)
-    print('Sent IHave Messages: ', sentIHave)
-    print()
-    print('Received Gossip Messages: ', receivedGossip)
-    print('Received Graft Messages: ', receivedGraft)
-    print('Received Prune Messages: ', receivedPrune)
-    print('Received IHave Messages: ', receivedIHave)
-    print()
-    print('Percentage Gossip Messages: {:.2f}'.format(percentageGossip))
-    print('Percentage Graft Messages: {:.2f}'.format(percentageGraft))
-    print('Percentage Prune Messages: {:.2f}'.format(percentagePrune))
-    print('Percentage IHave Messages: {:.2f}'.format(percentageIHave))
+    if(to_print):
+        print('PlumTree Messages:')
+        print()
+        print('Sent Gossip Messages: ', sentGossip)
+        print('Sent Graft Messages: ', sentGraft)
+        print('Sent Prune Messages: ', sentPrune)
+        print('Sent IHave Messages: ', sentIHave)
+        print()
+        print('Received Gossip Messages: ', receivedGossip)
+        print('Received Graft Messages: ', receivedGraft)
+        print('Received Prune Messages: ', receivedPrune)
+        print('Received IHave Messages: ', receivedIHave)
+        print()
+        print('Percentage Gossip Messages: {:.2f}'.format(percentageGossip))
+        print('Percentage Graft Messages: {:.2f}'.format(percentageGraft))
+        print('Percentage Prune Messages: {:.2f}'.format(percentagePrune))
+        print('Percentage IHave Messages: {:.2f}'.format(percentageIHave))
+        print()
 
     return totalSent, percentageGossip, percentageGraft, percentagePrune, percentageIHave
 
@@ -82,4 +86,4 @@ start_name = "./results_plumtree/results-MacBook-Pro-de-Ema.local-{}.txt"
 n_processes = 5
 starting_port = 5000
 
-plumtree_messages(start_name, n_processes, starting_port)
+#plumtree_messages(start_name, n_processes, starting_port)

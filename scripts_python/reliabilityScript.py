@@ -1,4 +1,4 @@
-def reliability(start_name, n_processes, starting_port):
+def reliability(start_name, n_processes, starting_port, to_print=False):
     messagesReceived = 0
     messagesSent = 0
 
@@ -14,15 +14,20 @@ def reliability(start_name, n_processes, starting_port):
                 elif(line[2].__contains__("Sending")):
                     messagesSent = messagesSent + 1
 
-    print("Total Messages Received:", messagesReceived)
-    print("Total Messages Sent:", messagesSent)
-
     avg_broad_reliability = messagesReceived / (messagesSent * n_processes) * 100
-    print("Average Broadcast Reliability: {:.2f}% ".format(avg_broad_reliability))
+    
+    if(to_print):
+        print('Reliability Analysis:')
+        print()
+        print("Total Messages Received:", messagesReceived)
+        print("Total Messages Sent:", messagesSent)
+        print("Average Broadcast Reliability: {:.2f}% ".format(avg_broad_reliability))
+        print()
+        
     return avg_broad_reliability
 
 start_name = "./results/results-Alexandres-MBP.lan-{}.txt"
 n_processes = 5
 starting_port = 5000
 
-reliability(start_name, n_processes, starting_port)
+#reliability(start_name, n_processes, starting_port)

@@ -1,4 +1,4 @@
-def messages_bytes(start_name, n_processes, starting_port):
+def messages_bytes(start_name, n_processes, starting_port, to_print=False):
     messagesTransmitted = 0
     messagesReceived = 0
     bytesTransmitted = 0
@@ -31,13 +31,16 @@ def messages_bytes(start_name, n_processes, starting_port):
         bytesTransmitted += finalBytesTransmitted
         bytesReceived += finalBytesReceived
 
-    print('Messages Transmitted: ', messagesTransmitted)
-    print('Messages Received: ', messagesReceived)
-    print('Bytes Transmitted: ', bytesTransmitted)
-    print('Bytes Received: ', bytesReceived)
-
     percentMessagesLost = (((messagesTransmitted - messagesReceived) / messagesTransmitted) * 100)
-    print("Percentage of messages lost: {:.2f}%".format(percentMessagesLost))
+
+    if(to_print):
+        print('Total Transmitted and Received Content:')
+        print('Messages Transmitted: ', messagesTransmitted)
+        print('Messages Received: ', messagesReceived)
+        print('Bytes Transmitted: ', bytesTransmitted)
+        print('Bytes Received: ', bytesReceived)
+        print("Percentage of messages lost: {:.2f}%".format(percentMessagesLost))
+        print()
 
     return messagesTransmitted, messagesReceived, bytesTransmitted, bytesReceived
 
@@ -45,4 +48,4 @@ start_name = "./results/results-Alexandres-MBP.lan-{}.txt"
 n_processes = 5
 starting_port = 5000
 
-messages_bytes(start_name, n_processes, starting_port)
+#messages_bytes(start_name, n_processes, starting_port)

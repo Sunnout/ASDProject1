@@ -1,6 +1,6 @@
 import datetime as dt
 
-def avg_latency(start_name, n_processes, starting_port):
+def avg_latency(start_name, n_processes, starting_port, to_print=False):
     msg_send_time = {}
     msg_deliver_time = {}
 
@@ -37,11 +37,15 @@ def avg_latency(start_name, n_processes, starting_port):
         total_time = total_time + latency[key].microseconds
 
     avg_broadcast_latency = total_time / len(latency) / 1000
-    print("Average Broadcast Latency: {:.2f} ms".format(avg_broadcast_latency))
+
+    if(to_print):
+        print("Average Broadcast Latency: {:.2f} ms".format(avg_broadcast_latency))
+        print("")
+        
     return avg_broadcast_latency
 
 start_name = "./results/results-Alexandres-MBP.lan-{}.txt"
 n_processes = 5
 starting_port = 5000
 
-avg_latency(start_name, n_processes, starting_port)
+#avg_latency(start_name, n_processes, starting_port)
