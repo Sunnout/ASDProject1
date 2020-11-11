@@ -82,8 +82,8 @@ def plumtree_messages(start_name, n_processes, starting_port, to_print=False):
 
     return totalSent, percentageGossip, percentageGraft, percentagePrune, percentageIHave
 
-start_name = "./results_plumtree/results-MacBook-Pro-de-Ema.local-{}.txt"
-n_processes = 5
+start_name = "./results/hyparPlumtree/results-Alexandres-MBP.lan-{}.txt"
+n_processes = 30
 starting_port = 5000
 
-#plumtree_messages(start_name, n_processes, starting_port)
+plumtree_messages(start_name, n_processes, starting_port, True)

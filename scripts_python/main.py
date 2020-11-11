@@ -19,7 +19,7 @@ reliabilityIndex = 1
 transmittedIndex = 2
 plumTreeIndex = 3
 
-n_processes = 5
+n_processes = 30
 starting_port = 5000
 
 cyclon_eager_results = []
@@ -68,23 +68,3 @@ graphBuilder = GraphBuilder(cyclon_eager_results, cyclon_plumtree_results, hypar
 graphBuilder.create_latency_graph()
 graphBuilder.create_reliability_graph()
 graphBuilder.create_messages_bytes_graphs()
-"""
-
-#Plot
-font = {'fontname':'Arial'}
-colours = ['navajowhite','orange','lightgreen','green']
-fig, ax = plt.subplots()
-ax = plt.bar(width=0.7, x=["Eager Push \nwith HyParView", "Eager Push \nwith Cyclon", "Plumtree \nwith HyParView", "Plumtree \nwith Cyclon"], height=avg_reliabilities, color=colours)
-plt.title("Time Speedup with light jobs vs. heavy jobs", **font)
-plt.axis([None, None, None, 3])
-plt.yticks([])
-xlocs, xlabs = plt.xticks()
-xlocs=[0,1,2,3]
-plt.xticks(xlocs, **font)
-plt.xlabel("\n Threads: 32", **font)
-
-for i, v in enumerate(avg_reliabilities):
-    plt.text(xlocs[i] -0.16, v + 0.05, str("{:.2f}".format(v)))
-
-plt.savefig('plot.pdf', format='pdf')
-"""
