@@ -96,7 +96,6 @@ for j in {2..10..4}; do
     sleep 305
 
   done
-  sleep 305
 
 done
 echo ""
