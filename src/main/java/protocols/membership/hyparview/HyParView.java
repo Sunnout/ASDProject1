@@ -430,7 +430,7 @@ public class HyParView extends GenericProtocol {
 		
 
 		if (passiveView.contains(peer) && !pendingNeighbour.contains(peer) && !activeView.contains(peer)) {
-			if(testNeighbours.contains(peer)) {
+			if(!testNeighbours.contains(peer)) {
 				boolean prio = activeView.size() == 0;
 				logger.debug("Sent neighborRequest with prio: " + prio + " to " + peer);
 				sendMessage(new NeighborRequest(self, prio), peer);
