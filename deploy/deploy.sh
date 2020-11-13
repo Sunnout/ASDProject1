@@ -73,7 +73,7 @@ sleep 1
 
 echo "Executing java"
 
-testes=(11 16)
+testes=(16)
 
 for j in ${testes[@]}; do
   
