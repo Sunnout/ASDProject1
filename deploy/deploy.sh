@@ -73,11 +73,11 @@ sleep 1
 
 echo "Executing java"
 
-testes=(16)
+testes=(11)
 printf "%.2d.. " 0
 for j in ${testes[@]}; do
 
-  for k in {2..3}; do
+  for k in {1..3}; do
     user=$(id -u):$(id -g)
 
     node=$(nextnode 0)
