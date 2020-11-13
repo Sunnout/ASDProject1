@@ -73,13 +73,15 @@ sleep 1
 
 echo "Executing java"
 
-testes=(11)
-printf "%.2d.. " 0
-for j in ${testes[@]}; do
+testes=(1 2 3 4 5 6 7 8 9 10 12 13 14 15)
 
+for j in ${testes[@]}; do
+  
   for k in {1..3}; do
+    printf "Starting $j - try $k! "
     user=$(id -u):$(id -g)
 
+    printf "%.2d.. " 0
     node=$(nextnode 0)
     oarsh -n $node docker exec -d node-00 ./start${j}.sh 0 $user $k "$@"
 

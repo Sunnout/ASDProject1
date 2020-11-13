@@ -27,6 +27,7 @@ import protocols.broadcast.plumtree.messages.PlumtreeGossipMessage;
 import protocols.broadcast.plumtree.messages.PlumtreeGraftMessage;
 import protocols.broadcast.plumtree.messages.PlumtreeIHaveMessage;
 import protocols.broadcast.plumtree.messages.PlumtreePruneMessage;
+import protocols.broadcast.plumtree.timers.ClearReceivedIdsTimer;
 import protocols.broadcast.plumtree.timers.ClearReceivedMessagesTimer;
 import protocols.broadcast.plumtree.timers.MissingMessageTimer;
 import protocols.broadcast.plumtree.timers.SendAnnouncementsTimer;
@@ -49,13 +50,15 @@ public class PlumtreeBroadcast extends GenericProtocol {
 	private PlumtreeIHaveMessage lazyIHaveMessage; // IHAVE msg with announcements to be sent
 	private final Map<UUID, List<Announcement>> missingMessages; // Map of <msgIds, list of announcements>
 	private final Map<UUID, PlumtreeGossipMessage> received; // Map of <msgIds, receivedMessages>
+	private final Map<UUID, Long> receivedIds; // Map of received msgIds and times
 	private final Map<UUID, Long> receivedTimes; // Map of <msgIds, receivedTimes>
 	private final Map<UUID, Long> missingMessageTimers; // Map of <msgIds, timerIds> for missing messages
 	private final Set<UUID> alreadyGrafted; // Ids of messages that were grafted
 	private boolean sentAnnouncements; // If announcements were sent within this period
 	
 	// Protocol parameters
-	private final int clearReceivedTimeout; // Timeout to clear received messages
+	private final int clearReceivedIds; // Timeout to clear received ids
+	private final int clearReceivedMsgs; // Timeout to clear received messages
 	private final int announcementTimeout; // Timeout to send compact announcements
 	private final int longerMissingTimeout; // Longer timeout to graft missing message
 	private final int shorterMissingTimeout; // Shorter timeout to graft missing message
@@ -83,13 +86,15 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		lazyIHaveMessage = new PlumtreeIHaveMessage(UUID.randomUUID(), myself, 0, new HashSet<>());
 		missingMessages = new HashMap<>();
 		received = new HashMap<>();
+		receivedIds = new HashMap<>();
 		receivedTimes = new HashMap<>();
 		missingMessageTimers = new HashMap<>();
 		alreadyGrafted = new HashSet<>();
 		sentAnnouncements = false;
 		
 		// Get some configurations from properties file
-		clearReceivedTimeout = Integer.parseInt(properties.getProperty("clear_received_time", "5000"));
+		clearReceivedIds = Integer.parseInt(properties.getProperty("clear_ids", "90000"));
+		clearReceivedMsgs = Integer.parseInt(properties.getProperty("clear_msgs", "7000"));
 		announcementTimeout = Integer.parseInt(properties.getProperty("announcement_timeout", "2000"));
 		longerMissingTimeout = Integer.parseInt(properties.getProperty("longer_missing_timeout", "500"));
 		shorterMissingTimeout = Integer.parseInt(properties.getProperty("shorter_missing_timeout", "400"));
@@ -119,13 +124,16 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		registerTimerHandler(MissingMessageTimer.TIMER_ID, this::uponMissingMessageTimer);
 		registerTimerHandler(SendAnnouncementsTimer.TIMER_ID, this::uponSendAnnouncementsTimer);
 		registerTimerHandler(ClearReceivedMessagesTimer.TIMER_ID, this::uponClearReceivedMessagesTimer);
+		registerTimerHandler(ClearReceivedIdsTimer.TIMER_ID, this::uponClearReceivedIdsTimer);
+
 	}
 
 	@Override
 	public void init(Properties props) {
 		//Setup the timer used to send compact announcements
 		setupPeriodicTimer(new SendAnnouncementsTimer(), announcementTimeout, announcementTimeout);
-		setupPeriodicTimer(new ClearReceivedMessagesTimer(), clearReceivedTimeout, clearReceivedTimeout);
+		setupPeriodicTimer(new ClearReceivedMessagesTimer(), clearReceivedMsgs, clearReceivedMsgs);
+		setupPeriodicTimer(new ClearReceivedIdsTimer(), clearReceivedIds, clearReceivedIds);
 	}
 
 	private void uponChannelCreated(ChannelCreated notification, short sourceProto) {
@@ -165,9 +173,11 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		PlumtreeGossipMessage msg = new PlumtreeGossipMessage(request.getMsgId(), request.getSender(), 0, request.getMsg());
 		eagerPushGossip(msg);
 		lazyPushGossip(msg);
-		triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
-		received.put(msg.getMid(), msg);
-		receivedTimes.put(msg.getMid(), receivedTime);
+		UUID mid = msg.getMid();
+		triggerNotification(new DeliverNotification(mid, msg.getSender(), msg.getContent()));
+		received.put(mid, msg);
+		receivedIds.put(mid, receivedTime);
+		receivedTimes.put(mid, receivedTime);
 	}
 
 
@@ -179,8 +189,9 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		nReceivedGossipMsgs++;
 		UUID mid = msg.getMid();
 
-		if (!received.containsKey(mid)) {
+		if (!receivedIds.containsKey(mid)) {
 			received.put(mid, msg);
+			receivedIds.put(mid, receivedTime);
 			receivedTimes.put(mid, receivedTime);
 			triggerNotification(new DeliverNotification(mid, from, msg.getContent()));
 
@@ -215,7 +226,7 @@ public class PlumtreeBroadcast extends GenericProtocol {
 		nReceivedIHaveMsgs++;
 
 		msg.getMessageIds().forEach(id -> {
-			if (!received.containsKey(id) && !missingMessageTimers.containsKey(id)) {
+			if (!receivedIds.containsKey(id) && !missingMessageTimers.containsKey(id)) {
 				List<Announcement> announcements = new ArrayList<Announcement>();
 				announcements.add(new Announcement(from, msg.getRound()));
 				missingMessages.put(id, announcements);
@@ -325,13 +336,25 @@ public class PlumtreeBroadcast extends GenericProtocol {
 
 		sentAnnouncements = false;
 	}
-
+	
+	// Clear messages periodically (shorter timeout)
 	private void uponClearReceivedMessagesTimer(ClearReceivedMessagesTimer clearReceivedMessagesTimer, long timerId) {
 		Iterator<Entry<UUID, PlumtreeGossipMessage>> it = received.entrySet().iterator();
 		while (it.hasNext()) {
 			Entry<UUID, PlumtreeGossipMessage> entry = it.next();
-			if(System.currentTimeMillis() > receivedTimes.get(entry.getKey()) + clearReceivedTimeout) {
+			if(System.currentTimeMillis() > receivedTimes.get(entry.getKey()) + clearReceivedMsgs) {
 				receivedTimes.remove(entry.getKey());
+				it.remove();
+			}
+		}
+	}
+	
+	// Clear message IDs periodically (longer timeout)
+	private void uponClearReceivedIdsTimer(ClearReceivedIdsTimer clearReceivedIdsTimer, long timerId) {
+		Iterator<Entry<UUID, Long>> it = receivedIds.entrySet().iterator();
+		while (it.hasNext()) {
+			Entry<UUID, Long> entry = it.next();
+			if(System.currentTimeMillis() > receivedIds.get(entry.getKey()) + clearReceivedIds) {
 				it.remove();
 			}
 		}
