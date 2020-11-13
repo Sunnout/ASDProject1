@@ -74,7 +74,7 @@ sleep 1
 echo "Executing java"
 
 printf "%.2d.. " 0
-for j in {16..16}; do
+for j in {13..16..3}; do
 
   for k in {1..2}; do
     user=$(id -u):$(id -g)
