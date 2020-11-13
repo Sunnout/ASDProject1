@@ -77,7 +77,7 @@ testes=(2 3 4 6 7 8 10 11 12 14 15)
 printf "%.2d.. " 0
 for j in ${testes[@]}; do
 
-  for k in {1..1}; do
+  for k in {3..3}; do
     user=$(id -u):$(id -g)
 
     node=$(nextnode 0)
