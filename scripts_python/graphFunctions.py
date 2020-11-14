@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
-import seaborn as sb
 import numpy as np
+import seaborn as sb
+import math
 sb.set()
+sb.set_style("darkgrid", {"axes.facecolor": ".9"})
 
 class GraphBuilder:
 
@@ -119,6 +121,81 @@ class GraphBuilder:
         self.__create_graph(x, latencies, 'Latency: ' + title, 'ms', self.LATENCY_FOLDER, file_name)
         self.__create_graph(x, reliabilities, 'Reliability: ' + title, '%', self.RELIABILITY_FOLDER, file_name)
 
+    def reliability_all(self):
+        n = 4
+        ind = np.arange(n)
+        width = 0.15
+
+        eager_cyclon = []
+        eager_hypar = []
+        plum_cyclon = []
+        plum_hypar = []
+
+        for parameter_comb in range(self.n_combs_parameters):
+            if(parameter_comb == 1):
+                comb = 2
+
+            elif(parameter_comb == 2):
+                comb = 1
+
+            else:
+                comb = parameter_comb
+
+            eager_cyclon.append(self.eager_cyclon_results[comb][self.reliability_index])
+            eager_hypar.append(self.eager_hypar_results[comb][self.reliability_index])
+            plum_cyclon.append(self.plumtree_cyclon_results[comb][self.reliability_index])
+            plum_hypar.append(self.plumtree_hypar_results[comb][self.reliability_index])
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        rects1 = ax.bar(ind - width, eager_cyclon, width, color='lightblue', edgecolor='black')
+        rects2 = ax.bar(ind, eager_hypar, width, color='steelblue', edgecolor='black')
+        rects3 = ax.bar(ind + width, plum_cyclon, width, color='lightgray', edgecolor='black')
+        rects4 = ax.bar(ind + 2 * width, plum_hypar, width, color='dimgray', edgecolor='black')
+        ax.set_title('Reliability (%)')
+        ax.set_xticks(ind + width / 2)
+        ax.set_xticklabels(('Small Payload\n&\nBig Interval', 'Small Payload\n&\nSmall Interval', 'Big Payload\n&\nBig Interval', 'Big Payload\n&\nSmall Interval'), fontsize='x-small')
+        ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Eager Push\nwith Cyclon", "Eager Push\nwith HyParView", "Plumtree\nwith Cyclon", "Plumtree\nwith HyParView"), fontsize='x-small')
+        plt.savefig(self.graph_path + '/reliabilities/all.pdf', format='pdf')
+
+    def latency_all(self):
+        n = 4
+        ind = np.arange(n)
+        width = 0.15
+
+        eager_cyclon = []
+        eager_hypar = []
+        plum_cyclon = []
+        plum_hypar = []
+
+        for parameter_comb in range(self.n_combs_parameters):
+            if(parameter_comb == 1):
+                comb = 2
+
+            elif(parameter_comb == 2):
+                comb = 1
+
+            else:
+                comb = parameter_comb
+
+            eager_cyclon.append(self.eager_cyclon_results[comb][self.latency_index])
+            eager_hypar.append(self.eager_hypar_results[comb][self.latency_index])
+            plum_cyclon.append(self.plumtree_cyclon_results[comb][self.latency_index])
+            plum_hypar.append(self.plumtree_hypar_results[comb][self.latency_index])
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        rects1 = ax.bar(ind - width, eager_cyclon, width, color='lightblue', edgecolor='black')
+        rects2 = ax.bar(ind, eager_hypar, width, color='steelblue', edgecolor='black')
+        rects3 = ax.bar(ind + width, plum_cyclon, width, color='lightgray', edgecolor='black')
+        rects4 = ax.bar(ind + 2 * width, plum_hypar, width, color='dimgray', edgecolor='black')
+        ax.set_title('Latency (ms)')
+        ax.set_xticks(ind + width / 2)
+        ax.set_xticklabels(('Small Payload\n&\nBig Interval', 'Small Payload\n&\nSmall Interval', 'Big Payload\n&\nBig Interval', 'Big Payload\n&\nSmall Interval'), fontsize='x-small')
+        ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Eager Push\nwith Cyclon", "Eager Push\nwith HyParView", "Plumtree\nwith Cyclon", "Plumtree\nwith HyParView"), fontsize='x-small')
+        plt.savefig(self.graph_path + '/latencies/all.pdf', format='pdf')
+
+
     def __create_graph(self, x, data, title, units, folder, file_name):
         _ , ax = plt.subplots()
         ax = plt.bar(width=0.7, x=x, height=data, color=self.COLOURS)
@@ -142,73 +219,87 @@ class GraphBuilder:
 
         plt.savefig(self.graph_path + folder + file_name, format='pdf')
 
-"""
     def create_messages_bytes_graphs(self):
-        cyclon_eager = []
-        cyclon_plum = []
-        hypar_eager = []
-        hypar_plum = []
+        eager_cyclon = []
+        eager_hypar = []
+        plum_cyclon = []
+        plum_hypar = []
 
-        mt, mr, bt, br = self.cyclon_eager_results[self.transmittedIndex]
-        cyclon_eager.append(mt)
-        cyclon_eager.append(mr)
-        cyclon_eager.append(bt)
-        cyclon_eager.append(br)
+        for i in range(2):
+            eager_cyclon.append([])
+            eager_hypar.append([])
+            plum_cyclon.append([])
+            plum_hypar.append([])
 
-        mt, mr, bt, br =  self.cyclon_plumtree_results[self.transmittedIndex]
-        cyclon_plum.append(mt)
-        cyclon_plum.append(mr)
-        cyclon_plum.append(bt)
-        cyclon_plum.append(br)
+        for parameter_comb in range(self.n_combs_parameters):
+            if(parameter_comb == 1):
+                comb = 2
 
-        mt, mr, bt, br = self.hypar_eager_results[self.transmittedIndex]
-        hypar_eager.append(mt)
-        hypar_eager.append(mr)
-        hypar_eager.append(bt)
-        hypar_eager.append(br)
+            elif(parameter_comb == 2):
+                comb = 1
 
-        mt, mr, bt, br =  self.hypar_plumtree_results[self.transmittedIndex]
-        hypar_plum.append(mt)
-        hypar_plum.append(mr)
-        hypar_plum.append(bt)
-        hypar_plum.append(br)
+            else:
+                comb = parameter_comb
 
-        self.__create_messages_graph(cyclon_eager[0:2], cyclon_plum[0:2], hypar_eager[0:2], hypar_plum[0:2])
-        self.__create_bytes_graph(cyclon_eager[2:], cyclon_plum[2:], hypar_eager[2:], hypar_plum[2:])
+            mt1, _, bt1, _ = self.eager_cyclon_results[comb][self.transmitted_index]
+            eager_cyclon[0].append(mt1)
+            eager_cyclon[1].append(bt1)
 
-    def __create_messages_graph(self, cyclon_eager, cyclon_plum, hypar_eager, hypar_plum):
-        n = 2
+            mt2, _, bt2, _ = self.eager_hypar_results[comb][self.transmitted_index]
+            eager_hypar[0].append(mt2)
+            eager_hypar[1].append(bt2)
+
+            mt3, _, bt3, _ =  self.plumtree_cyclon_results[comb][self.transmitted_index]
+            plum_cyclon[0].append(mt3)
+            plum_cyclon[1].append(bt3)
+
+            mt4, _, bt4, _ =  self.plumtree_hypar_results[comb][self.transmitted_index]
+            plum_hypar[0].append(mt4)
+            plum_hypar[1].append(bt4)
+
+        self.__create_messages_graph(eager_cyclon[0], eager_hypar[0], plum_cyclon[0], plum_hypar[0])
+        self.__create_bytes_graph(eager_cyclon[1], eager_hypar[1], plum_cyclon[1], plum_hypar[1])
+
+    def __create_messages_graph(self, eager_cyclon, eager_hypar, plum_cyclon, plum_hypar):
+        n = 4
         ind = np.arange(n)
-        width = 0.2
+        width = 0.15
+
+        print(eager_cyclon)
+        print(eager_hypar)
+        print(plum_cyclon)
+        print(plum_hypar)
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        rects1 = ax.bar(ind - width, cyclon_eager, width, color='navajowhite')
-        rects2 = ax.bar(ind, cyclon_plum, width, color='orange')
-        rects3 = ax.bar(ind + width, hypar_eager, width, color='lightgreen')
-        rects4 = ax.bar(ind + 2 * width, hypar_plum, width, color='green')
-        ax.set_title('Messages Transmitted and Received')
+        rects1 = ax.bar(ind - width, eager_cyclon, width, color='lightblue', edgecolor='black')
+        rects2 = ax.bar(ind, eager_hypar, width, color='steelblue', edgecolor='black')
+        rects3 = ax.bar(ind + width, plum_cyclon, width, color='lightgray', edgecolor='black')
+        rects4 = ax.bar(ind + 2 * width, plum_hypar, width, color='dimgray', edgecolor='black')
+        ax.set_title('Number of Messages Transmitted')
         ax.set_xticks(ind + width / 2)
-        ax.set_xticklabels(('Messages\nTransmitted', 'Messages\nReceived'))
-        ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Cyclon\nEager Push", "Cyclon\nPlumtree", "HyparView\nEager Push", "HyparView\nPlumtree"), fontsize='x-small')
-        plt.savefig('./graphs/messages.pdf', format='pdf')
+        ax.set_xticklabels(('Small Payload\n&\nBig Interval', 'Small Payload\n&\nSmall Interval', 'Big Payload\n&\nBig Interval', 'Big Payload\n&\nSmall Interval'), fontsize='x-small')
+        ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Eager Push\nwith Cyclon", "Eager Push\nwith HyParView", "Plumtree\nwith Cyclon", "Plumtree\nwith HyParView"), fontsize='x-small')
+        plt.yscale("log")
+        plt.savefig(self.graph_path + '/messages_bytes/messages.pdf', format='pdf')
 
-    def __create_bytes_graph(self, cyclon_eager, cyclon_plum, hypar_eager, hypar_plum):
-        n = 2
+    def __create_bytes_graph(self, eager_cyclon, eager_hypar, plum_cyclon, plum_hypar):
+        n = 4
         ind = np.arange(n)
-        width = 0.2
+        width = 0.15
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        rects1 = ax.bar(ind - width, cyclon_eager, width, color='navajowhite')
-        rects2 = ax.bar(ind, cyclon_plum, width, color='orange')
-        rects3 = ax.bar(ind + width, hypar_eager, width, color='lightgreen')
-        rects4 = ax.bar(ind + 2 * width, hypar_plum, width, color='green')
-        ax.set_title('Bytes Transmitted and Received')
+        rects1 = ax.bar(ind - width, eager_cyclon, width, color='lightblue', edgecolor='black')
+        rects2 = ax.bar(ind, eager_hypar, width, color='steelblue', edgecolor='black')
+        rects3 = ax.bar(ind + width, plum_cyclon, width, color='lightgray', edgecolor='black')
+        rects4 = ax.bar(ind + 2 * width, plum_hypar, width, color='dimgray', edgecolor='black')
+        ax.set_title('Number of Bytes Transmitted')
         ax.set_xticks(ind + width / 2)
-        ax.set_xticklabels(('Bytes\nTransmitted', 'Bytes\nReceived'))
-        ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Cyclon\nEager Push", "Cyclon\nPlumtree", "HyparView\nEager Push", "HyparView\nPlumtree"), fontsize='x-small')
-        plt.savefig('./graphs/bytes.pdf', format='pdf')
+        ax.set_xticklabels(('Small Payload\n&\nBig Interval', 'Small Payload\n&\nSmall Interval', 'Big Payload\n&\nBig Interval', 'Big Payload\n&\nSmall Interval'), fontsize='x-small')
+        ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Eager Push\nwith Cyclon", "Eager Push\nwith HyParView", "Plumtree\nwith Cyclon", "Plumtree\nwith HyParView"), fontsize='x-small')
+        plt.yscale("log")
+        plt.savefig(self.graph_path + '/messages_bytes/bytes.pdf', format='pdf')
 
 """
 
@@ -221,4 +312,4 @@ class GraphBuilder:
 
     #Podemos enviar mensagens por ligações abertas por outro peer, parâmetro connection do send, 
     #meter uma constante para que a mensagem seja enviado pelo incoming channel
-        
+        """

@@ -62,9 +62,14 @@ print(results)
 
 """
 graphBuilder = GraphBuilder(results, os.getcwd())
-
+"""
 for comb in range(n_parameter_combs):
     graphBuilder.graphs_between_protocols(comb)
 
 for comb in range(n_protocol_combs):
     graphBuilder.graphs_same_protocol(comb)
+    """
+
+graphBuilder.create_messages_bytes_graphs()
+graphBuilder.reliability_all()
+graphBuilder.latency_all()
