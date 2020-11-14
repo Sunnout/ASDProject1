@@ -1,89 +1,102 @@
-def plumtree_messages(start_name, n_processes, starting_port, to_print=False):
-    sentGossip = 0
-    sentGraft = 0
-    sentPrune = 0
-    sentIHave = 0
-    receivedGossip = 0
-    receivedGraft = 0
-    receivedPrune = 0
-    receivedIHave = 0
+def plumtree_messages(start_name, n_processes, n_runs, combination, to_print=False):
+    sent_gossip = []
+    sent_graft = []
+    sent_prune = []
+    sent_i_have = []
+    received_gossip = []
+    received_graft = []
+    received_prune = []
+    received_i_have = []
 
-    for port in range(starting_port, starting_port + n_processes):
-        f = open(start_name.format(port), "r")
-        finalSentGossip = 0
-        finalSentGraft = 0
-        finalSentPrune = 0
-        finalSentIHave = 0
-        finalReceivedGossip = 0
-        finalReceivedGraft = 0
-        finalReceivedPrune = 0
-        finalReceivedIHave = 0
+    for run in range(n_runs):
+        sent_gossip.append(0)
+        sent_graft.append(0)
+        sent_prune.append(0)
+        sent_i_have.append(0)
+        received_gossip.append(0)
+        received_graft.append(0)
+        received_prune.append(0)
+        received_i_have.append(0)
 
-        for i in f:
-            line = i.split(" ")
+    for proc in range(n_processes):
+        progressBar(proc, n_processes)
+        for run in range(n_runs):
+            f = open(start_name.format(proc, combination, run+1), "r")
+            finalSentGossip = 0
+            finalSentGraft = 0
+            finalSentPrune = 0
+            finalSentIHave = 0
+            finalReceivedGossip = 0
+            finalReceivedGraft = 0
+            finalReceivedPrune = 0
+            finalReceivedIHave = 0
 
-            if(i.__contains__('Sent Gossip Msgs:')):
-                finalSentGossip = int(line[3])
+            for i in f:
+                line = i.split(" ")
 
-            elif(i.__contains__('Sent Graft Msgs:')):
-                finalSentGraft = int(line[3])
+                if(i.__contains__('Sent Gossip Msgs:')):
+                    finalSentGossip = int(line[3])
 
-            elif(i.__contains__('Sent Prune Msgs:')):
-                finalSentPrune = int(line[3])
+                elif(i.__contains__('Sent Graft Msgs:')):
+                    finalSentGraft = int(line[3])
 
-            elif(i.__contains__('Sent IHave Msgs:')):
-                finalSentIHave = int(line[3])
+                elif(i.__contains__('Sent Prune Msgs:')):
+                    finalSentPrune = int(line[3])
 
-            elif(i.__contains__('Received Gossip Msgs:')):
-                finalReceivedGossip = int(line[3])
+                elif(i.__contains__('Sent IHave Msgs:')):
+                    finalSentIHave = int(line[3])
 
-            elif(i.__contains__('Received Graft Msgs:')):
-                finalReceivedGraft = int(line[3])
+                elif(i.__contains__('Received Gossip Msgs:')):
+                    finalReceivedGossip = int(line[3])
 
-            elif(i.__contains__('Received Prune Msgs:')):
-                finalReceivedPrune = int(line[3])
+                elif(i.__contains__('Received Graft Msgs:')):
+                    finalReceivedGraft = int(line[3])
 
-            elif(i.__contains__('Received IHave Msgs:')):
-                finalReceivedIHave = int(line[3])
+                elif(i.__contains__('Received Prune Msgs:')):
+                    finalReceivedPrune = int(line[3])
 
-        sentGossip += finalSentGossip
-        sentGraft += finalSentGraft
-        sentPrune += finalSentPrune
-        sentIHave += finalSentIHave
-        receivedGossip += finalReceivedGossip
-        receivedGraft += finalReceivedGraft
-        receivedPrune += finalReceivedPrune
-        receivedIHave += finalReceivedIHave
+                elif(i.__contains__('Received IHave Msgs:')):
+                    finalReceivedIHave = int(line[3])
 
-    totalSent = sentGossip + sentGraft + sentPrune + sentIHave
-    percentageGossip = (sentGossip / totalSent) * 100
-    percentageGraft = (sentGraft / totalSent) * 100
-    percentagePrune = (sentPrune / totalSent) * 100
-    percentageIHave = (sentIHave / totalSent) * 100
+            sent_gossip[run] += finalSentGossip
+            sent_graft[run] += finalSentGraft
+            sent_prune[run] += finalSentPrune
+            sent_i_have[run] += finalSentIHave
+            received_gossip[run] += finalReceivedGossip
+            received_graft[run] += finalReceivedGraft
+            received_prune[run] += finalReceivedPrune
+            received_i_have[run] += finalReceivedIHave
+
+    avg_total_sent = (sum(sent_gossip) + sum(sent_graft) + sum(sent_prune) + sum(sent_i_have)) / n_runs
+    percentage_gossip = (sum(sent_gossip) / avg_total_sent) * 100
+    percentage_graft = (sum(sent_graft) / avg_total_sent) * 100
+    percentage_prune = (sum(sent_prune) / avg_total_sent) * 100
+    percentage_i_have = (sum(sent_i_have) / avg_total_sent) * 100
 
     if(to_print):
         print('PlumTree Messages:')
         print()
-        print('Sent Gossip Messages: ', sentGossip)
-        print('Sent Graft Messages: ', sentGraft)
-        print('Sent Prune Messages: ', sentPrune)
-        print('Sent IHave Messages: ', sentIHave)
+        print('Sent Gossip Messages: ', sent_gossip)
+        print('Sent Graft Messages: ', sent_graft)
+        print('Sent Prune Messages: ', sent_prune)
+        print('Sent IHave Messages: ', sent_i_have)
         print()
-        print('Received Gossip Messages: ', receivedGossip)
-        print('Received Graft Messages: ', receivedGraft)
-        print('Received Prune Messages: ', receivedPrune)
-        print('Received IHave Messages: ', receivedIHave)
+        print('Received Gossip Messages: ', received_gossip)
+        print('Received Graft Messages: ', received_graft)
+        print('Received Prune Messages: ', received_prune)
+        print('Received IHave Messages: ', received_i_have)
         print()
-        print('Percentage Gossip Messages: {:.2f}'.format(percentageGossip))
-        print('Percentage Graft Messages: {:.2f}'.format(percentageGraft))
-        print('Percentage Prune Messages: {:.2f}'.format(percentagePrune))
-        print('Percentage IHave Messages: {:.2f}'.format(percentageIHave))
+        print('Percentage Gossip Messages: {:.2f}'.format(percentage_gossip))
+        print('Percentage Graft Messages: {:.2f}'.format(percentage_graft))
+        print('Percentage Prune Messages: {:.2f}'.format(percentage_prune))
+        print('Percentage IHave Messages: {:.2f}'.format(percentage_i_have))
         print()
 
-    return totalSent, percentageGossip, percentageGraft, percentagePrune, percentageIHave
+    return avg_total_sent, percentage_gossip, percentage_graft, percentage_prune, percentage_i_have
 
-start_name = "./results/hyparPlumtree/results-Alexandres-MBP.lan-{}.txt"
-n_processes = 30
-starting_port = 5000
+def progressBar(current, total, barLength = 20):
+    percent = float(current) * 100 / total
+    arrow   = '-' * int(percent/100 * barLength - 1) + '>'
+    spaces  = ' ' * (barLength - len(arrow))
 
-plumtree_messages(start_name, n_processes, starting_port, True)
+    print('Progress: [%s%s] %d %%' % (arrow, spaces, percent), end='\r')

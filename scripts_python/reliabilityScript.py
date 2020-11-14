@@ -1,33 +1,63 @@
-def reliability(start_name, n_processes, starting_port, to_print=False):
-    messagesReceived = 0
-    messagesSent = 0
+import os
 
-    for port in range(starting_port, starting_port + n_processes):
-        f = open(start_name.format(port), "r")
+def reliability(start_name, n_processes, n_runs, combination, to_print=False):
+    messages_received = []
+    messages_sent = []
 
-        for i in f:
-            line = i.split(" ")
-            if(line[1].__contains__("BroadcastApp")):
-                if(line[2].__contains__("Received")):
-                    messagesReceived = messagesReceived + 1
+    for run in range(n_runs):
+        messages_received.append(0)
+        messages_sent.append(0)
 
-                elif(line[2].__contains__("Sending")):
-                    messagesSent = messagesSent + 1
+    for proc in range(n_processes):
+        progressBar(proc, n_processes)
+        for run in range(n_runs):
+            f = open(start_name.format(proc, combination, run+1), "r")
+            non_dup_received_msgs = set()
 
-    avg_broad_reliability = messagesReceived / (messagesSent * n_processes) * 100
+            for i in f:
+                line = i.split(" ")
+
+                if(line[1].__contains__("BroadcastApp")):
+                    if(line[2].__contains__("Received")):
+                        non_dup_received_msgs.add(line[3])
+
+                    elif(line[2].__contains__("Sending")):
+                        messages_sent[run] += 1
+
+            messages_received[run] += len(non_dup_received_msgs)
+
+    print("Progress: [------------------->] 100%", end='\n')
+    total_reliability = 0
+
+    for run in range(n_runs):
+        r = messages_received[run] / (messages_sent[run] * n_processes) * 100
+        total_reliability = total_reliability + r
+
+    avg_broad_reliability = total_reliability / n_runs
+    avg_messages_received = sum(messages_received) / n_runs
+    avg_messages_sent = sum(messages_sent) / n_runs
     
     if(to_print):
         print('Reliability Analysis:')
-        print()
-        print("Total Messages Received:", messagesReceived)
-        print("Total Messages Sent:", messagesSent)
-        print("Average Broadcast Reliability: {:.2f}% ".format(avg_broad_reliability))
+        print("Avg Messages Received:", avg_messages_received)
+        print("Avg Messages Sent:", avg_messages_sent)
+        print("Avg Broadcast Reliability: {:.2f}% ".format(avg_broad_reliability))
         print()
         
     return avg_broad_reliability
 
+def progressBar(current, total, barLength = 20):
+    percent = float(current) * 100 / total
+    arrow   = '-' * int(percent/100 * barLength - 1) + '>'
+    spaces  = ' ' * (barLength - len(arrow))
+
+    print('Progress: [%s%s] %d %%' % (arrow, spaces, percent), end='\r')
+
+"""
 start_name = "./results/results-Alexandres-MBP.lan-{}.txt"
 n_processes = 5
 starting_port = 5000
 
 #reliability(start_name, n_processes, starting_port)
+
+"""
