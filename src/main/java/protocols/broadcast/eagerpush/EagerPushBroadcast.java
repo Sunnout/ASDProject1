@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -21,7 +22,7 @@ import network.data.Host;
 import protocols.broadcast.common.BroadcastRequest;
 import protocols.broadcast.common.DeliverNotification;
 import protocols.broadcast.eagerpush.messages.EagerPushMessage;
-import protocols.broadcast.plumtree.timers.ClearReceivedMessagesTimer;
+import protocols.broadcast.plumtree.timers.ClearReceivedIdsTimer;
 import protocols.membership.common.notifications.ChannelCreated;
 import protocols.membership.common.notifications.NeighbourDown;
 import protocols.membership.common.notifications.NeighbourUp;
@@ -35,11 +36,10 @@ public class EagerPushBroadcast extends GenericProtocol {
 
 	private final Host myself; // My own address/port
 	private final Set<Host> neighbours; // Set of known neighbours
-	private final Set<UUID> received; // Set of received msgIds
 	private final Map<UUID, Long> receivedTimes; // Map of <msgIds, receivedTimes>
 	
 	// Protocol parameters
-	private final int clearReceivedTimeout; // Timeout to clear received messages
+	private final int clearReceivedIds; // Timeout to clear received messages
 	private final int fanout; // Number of neighbours to send gossip message to
 
 	private boolean channelReady;
@@ -48,12 +48,11 @@ public class EagerPushBroadcast extends GenericProtocol {
 		super(PROTOCOL_NAME, PROTOCOL_ID);
 		this.myself = myself;
 		neighbours = new HashSet<>();
-		received = new HashSet<>();
-		channelReady = false;
 		receivedTimes = new HashMap<>();
+		channelReady = false;
 		
 		// Get some configurations from properties file
-		clearReceivedTimeout = Integer.parseInt(properties.getProperty("clear_received_time", "5000"));
+		clearReceivedIds = Integer.parseInt(properties.getProperty("clear_ids", "90000"));
 		fanout = (int)Math.ceil(Math.log(Integer.parseInt(properties.getProperty("node_magnitude", "10"))));
 
 		/*--------------------- Register Request Handlers ----------------------------- */
@@ -65,12 +64,12 @@ public class EagerPushBroadcast extends GenericProtocol {
 		subscribeNotification(ChannelCreated.NOTIFICATION_ID, this::uponChannelCreated);
 
 		/*--------------------- Register Timer Handlers ------------------------- */
-		registerTimerHandler(ClearReceivedMessagesTimer.TIMER_ID, this::uponClearReceivedMessagesTimer);
+		registerTimerHandler(ClearReceivedIdsTimer.TIMER_ID, this::uponClearReceivedIdsTimer);
 	}
 
 	@Override
 	public void init(Properties props) {
-		setupPeriodicTimer(new ClearReceivedMessagesTimer(), clearReceivedTimeout, clearReceivedTimeout);
+		setupPeriodicTimer(new ClearReceivedIdsTimer(), clearReceivedIds, clearReceivedIds);
 	}
 
 	// Upon receiving the channelId from the membership, register callbacks and serializers
@@ -114,7 +113,7 @@ public class EagerPushBroadcast extends GenericProtocol {
 		long receivedTime = System.currentTimeMillis();
 		
 		// If we already received it once, do nothing
-		if (received.add(msg.getMid())) {
+		if (!receivedTimes.containsKey(msgId)) {
 			receivedTimes.put(msgId, receivedTime);
 			triggerNotification(new DeliverNotification(msg.getMid(), msg.getSender(), msg.getContent()));
 
@@ -133,12 +132,12 @@ public class EagerPushBroadcast extends GenericProtocol {
 	
 	/*-------------------------------------- Timers ----------------------------------------- */
 
-	private void uponClearReceivedMessagesTimer(ClearReceivedMessagesTimer clearReceivedMessagesTimer, long timerId) {
-		Iterator<UUID> it = received.iterator();
+	// Clear message IDs periodically (longer timeout)
+	private void uponClearReceivedIdsTimer(ClearReceivedIdsTimer clearReceivedIdsTimer, long timerId) {
+		Iterator<Entry<UUID, Long>> it = receivedTimes.entrySet().iterator();
 		while (it.hasNext()) {
-			UUID msgId = (UUID)it.next();
-			if(System.currentTimeMillis() > receivedTimes.get(msgId) + clearReceivedTimeout) {
-				receivedTimes.remove(msgId);
+			Entry<UUID, Long> entry = it.next();
+			if(System.currentTimeMillis() > receivedTimes.get(entry.getKey()) + clearReceivedIds) {
 				it.remove();
 			}
 		}
