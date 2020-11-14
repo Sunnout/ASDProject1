@@ -152,7 +152,7 @@ class GraphBuilder:
         rects2 = ax.bar(ind, eager_hypar, width, color='steelblue', edgecolor='black')
         rects3 = ax.bar(ind + width, plum_cyclon, width, color='lightgray', edgecolor='black')
         rects4 = ax.bar(ind + 2 * width, plum_hypar, width, color='dimgray', edgecolor='black')
-        ax.set_title('Reliability (%)')
+        ax.set_title('Average Broadcast Reliability (%)')
         ax.set_xticks(ind + width / 2)
         ax.set_xticklabels(('Small Payload\n&\nBig Interval', 'Small Payload\n&\nSmall Interval', 'Big Payload\n&\nBig Interval', 'Big Payload\n&\nSmall Interval'), fontsize='x-small')
         ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Eager Push\nwith Cyclon", "Eager Push\nwith HyParView", "Plumtree\nwith Cyclon", "Plumtree\nwith HyParView"), fontsize='x-small')
@@ -189,7 +189,7 @@ class GraphBuilder:
         rects2 = ax.bar(ind, eager_hypar, width, color='steelblue', edgecolor='black')
         rects3 = ax.bar(ind + width, plum_cyclon, width, color='lightgray', edgecolor='black')
         rects4 = ax.bar(ind + 2 * width, plum_hypar, width, color='dimgray', edgecolor='black')
-        ax.set_title('Latency (ms)')
+        ax.set_title('Average Broadcast Latency (ms)')
         ax.set_xticks(ind + width / 2)
         ax.set_xticklabels(('Small Payload\n&\nBig Interval', 'Small Payload\n&\nSmall Interval', 'Big Payload\n&\nBig Interval', 'Big Payload\n&\nSmall Interval'), fontsize='x-small')
         ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Eager Push\nwith Cyclon", "Eager Push\nwith HyParView", "Plumtree\nwith Cyclon", "Plumtree\nwith HyParView"), fontsize='x-small')
@@ -300,16 +300,3 @@ class GraphBuilder:
         ax.legend((rects1[0], rects2[0], rects3[0], rects4[0]), ("Eager Push\nwith Cyclon", "Eager Push\nwith HyParView", "Plumtree\nwith Cyclon", "Plumtree\nwith HyParView"), fontsize='x-small')
         plt.yscale("log")
         plt.savefig(self.graph_path + '/messages_bytes/bytes.pdf', format='pdf')
-
-"""
-
-    #VER LIMITES DE ESCRITORES DE FICHEIROS
-    #FAZER TUNEL SSH
-    #meu porto 3000 a um storage com porto 3000
-    #Tunel aberto no porto 3000
-    #Com esta ligação, podemos correr localhost:3000 e ver o overview dashboard
-    #Vemos o estado das máquinas todas
-
-    #Podemos enviar mensagens por ligações abertas por outro peer, parâmetro connection do send, 
-    #meter uma constante para que a mensagem seja enviado pelo incoming channel
-        """

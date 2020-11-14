@@ -60,16 +60,22 @@ for comb in [16]:
 
 print(results)
 
-"""
 graphBuilder = GraphBuilder(results, os.getcwd())
-"""
+
 for comb in range(n_parameter_combs):
     graphBuilder.graphs_between_protocols(comb)
 
 for comb in range(n_protocol_combs):
     graphBuilder.graphs_same_protocol(comb)
-    """
+
 
 graphBuilder.create_messages_bytes_graphs()
 graphBuilder.reliability_all()
 graphBuilder.latency_all()
+"""
+
+for comb in range(n_combinations):
+
+    _, _, bt, br = results[comb][2]
+    perc_bytes_lost = ((bt-br) / bt) * 100
+    print('t{}: {:.2f}'.format(comb+1, perc_bytes_lost))
