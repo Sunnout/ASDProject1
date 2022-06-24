@@ -10,4 +10,4 @@ Contains implementations of 3 membership protocols:
 - Cyclon
 - HyParView
 
-The 'graphs' folder contains results obtained from executing experiments using different combinations of these protocols.
+The `graphs` folder contains results obtained from executing experiments using different combinations of these protocols.
